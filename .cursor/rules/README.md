@@ -4,6 +4,39 @@ This directory contains cursor rules to prevent common errors and enforce best p
 
 ## 📁 Files
 
+### `project-config.md`
+**Purpose:** Project-specific configuration and execution rules
+
+**Covers:**
+- ✅ Conda environment setup
+- ✅ Execution rules (always use conda)
+- ✅ Code style guidelines
+- ✅ Project structure
+- ✅ Testing approach
+- ✅ Key commands
+
+**When to Reference:**
+- Running Python commands
+- Setting up development environment
+- Understanding project structure
+- Installing dependencies
+
+### `python-fastapi.md`
+**Purpose:** Python and FastAPI best practices
+
+**Covers:**
+- ✅ Python coding standards
+- ✅ FastAPI patterns
+- ✅ Error handling
+- ✅ Performance optimization
+- ✅ Pydantic usage
+
+**When to Reference:**
+- Writing API endpoints
+- Creating Pydantic models
+- Error handling patterns
+- Performance optimization
+
 ### `telegram-bot-lambda.md`
 **Purpose:** Prevent Lambda deployment errors and Telegram bot issues
 
