@@ -97,7 +97,7 @@ async def startup_event():
         # Only initialize if environment variables are set
         if os.getenv("TELEGRAM_BOT_TOKEN"):
             if not bot._initialized:
-                await bot.initialize()
+                bot.initialize()
             logger.info("Bot initialized successfully")
         else:
             logger.warning("TELEGRAM_BOT_TOKEN not set - bot not initialized")
@@ -116,7 +116,7 @@ async def shutdown_event():
     logger.info("Shutting down CozyBerries Telegram Bot...")
     try:
         if bot._initialized:
-            await bot.stop()
+            bot.stop()
     except Exception as e:
         logger.error(f"Error during shutdown: {e}")
 
@@ -268,7 +268,7 @@ async def telegram_webhook(request: Request):
         
         # Initialize bot if needed
         if not bot._initialized:
-            await bot.initialize()
+            bot.initialize()
         
         # Process update
         await bot.process_update(update_data)
