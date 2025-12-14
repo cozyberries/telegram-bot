@@ -2,7 +2,7 @@
 
 from typing import List, Dict, Any, Optional
 from datetime import datetime
-from app.database.models import Order, Product, Expense, OrderStatus, ExpenseStatus
+from app.database.models import Order, Product, Expense, OrderStatus
 
 
 def format_currency(amount: float, currency: str = "INR") -> str:
@@ -63,20 +63,6 @@ def format_order_status(status: OrderStatus) -> str:
     }
     emoji = status_emoji.get(status, "")
     formatted = status.replace('_', ' ').title()
-    return f"{emoji} {formatted}"
-
-
-def format_expense_status(status: ExpenseStatus) -> str:
-    """Format expense status with emoji"""
-    status_emoji = {
-        "pending": "⏳",
-        "approved": "✅",
-        "rejected": "❌",
-        "paid": "💰",
-        "cancelled": "🚫"
-    }
-    emoji = status_emoji.get(status, "")
-    formatted = status.title()
     return f"{emoji} {formatted}"
 
 
@@ -161,18 +147,17 @@ def format_expense_summary(expense: Expense) -> str:
     message = (
         f"💳 *{escape_markdown(expense.title)}*\n\n"
         f"*Amount:* {format_currency(expense.amount)}\n"
-        f"*Status:* {format_expense_status(expense.status)}\n"
-        f"*Category:* {escape_markdown(expense.category.replace('_', ' ').title())}\n"
-        f"*Date:* {format_date(expense.expense_date)}\n"
-        f"*Priority:* {expense.priority.title()}\n"
+        f"*Date:* {format_date(expense.transaction_date)}\n"
     )
     
-    if expense.vendor:
-        message += f"*Vendor:* {escape_markdown(expense.vendor)}\n"
+    if expense.category:
+        message += f"*Category:* {escape_markdown(expense.category)}\n"
     
-    if expense.description:
+    if expense.description and expense.description != expense.title:
         desc = truncate_text(expense.description, 100)
         message += f"\n{escape_markdown(desc)}\n"
+    
+    message += f"\n*ID:* `{expense.id}`\n"
     
     return message
 

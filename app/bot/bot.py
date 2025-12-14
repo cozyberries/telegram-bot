@@ -106,9 +106,7 @@ class TelegramBot:
             self.application.add_handler(CommandHandler("expenses", expenses.list_expenses_command))
             self.application.add_handler(CommandHandler("expense", expenses.get_expense_command))
             self.application.add_handler(expenses.add_expense_conversation())
-            self.application.add_handler(CommandHandler("approve_expense", expenses.approve_expense_command))
-            self.application.add_handler(CommandHandler("reject_expense", expenses.reject_expense_command))
-            self.application.add_handler(CommandHandler("update_expense", expenses.update_expense_command))
+            self.application.add_handler(CommandHandler("delete_expense", expenses.delete_expense_command))
             
             # Stock handlers
             self.application.add_handler(CommandHandler("stock", stock.list_stock_command))
@@ -144,9 +142,6 @@ class TelegramBot:
         elif data.startswith("order_"):
             from app.bot.handlers import orders
             await orders.handle_order_callback(update, context)
-        elif data.startswith("expense_"):
-            from app.bot.handlers import expenses
-            await expenses.handle_expense_callback(update, context)
         elif data.startswith("stock_"):
             from app.bot.handlers import stock
             await stock.handle_stock_callback(update, context)

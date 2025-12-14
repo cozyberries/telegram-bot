@@ -9,7 +9,7 @@ from app.utils.formatters import format_expense_summary, format_list_header
 from app.utils.validators import parse_command_args, validate_amount, validate_date
 
 # Conversation states
-EXPENSE_TITLE, EXPENSE_AMOUNT, EXPENSE_CATEGORY, EXPENSE_DATE, EXPENSE_VENDOR = range(5)
+EXPENSE_TITLE = 0
 
 
 @admin_required
@@ -17,34 +17,20 @@ async def list_expenses_command(update: Update, context: ContextTypes.DEFAULT_TY
     """Handle /expenses command - list expenses"""
     try:
         # Call synchronous function
-        expenses = expense_service.get_expenses(limit=10)
+        expenses = expense_service.get_expenses(limit=20)
         
         if not expenses:
             await update.message.reply_text("No expenses found.")
             return
         
-        message = format_list_header("Expenses", len(expenses))
+        message = format_list_header("Recent Expenses", len(expenses))
         
         for expense in expenses:
             message += f"\n{format_expense_summary(expense)}\n---\n"
         
-        # Add filter buttons
-        keyboard = [
-            [
-                InlineKeyboardButton("⏳ Pending", callback_data="expense_filter_pending"),
-                InlineKeyboardButton("✅ Approved", callback_data="expense_filter_approved"),
-            ],
-            [
-                InlineKeyboardButton("❌ Rejected", callback_data="expense_filter_rejected"),
-                InlineKeyboardButton("🔄 All", callback_data="expense_filter_all"),
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
         await update.message.reply_text(
             message,
-            parse_mode="Markdown",
-            reply_markup=reply_markup
+            parse_mode="Markdown"
         )
     except Exception as e:
         await update.message.reply_text(f"Error fetching expenses: {str(e)}")
@@ -74,119 +60,44 @@ async def get_expense_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         
         message = format_expense_summary(expense)
         
-        # Add action buttons based on status
-        keyboard = []
-        if expense.status == "pending":
-            keyboard.append([
-                InlineKeyboardButton("✅ Approve", callback_data=f"expense_approve_{expense_id}"),
-                InlineKeyboardButton("❌ Reject", callback_data=f"expense_reject_{expense_id}"),
-            ])
-        
-        reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
-        
         await update.message.reply_text(
             message,
-            parse_mode="Markdown",
-            reply_markup=reply_markup
+            parse_mode="Markdown"
         )
     except Exception as e:
         await update.message.reply_text(f"Error fetching expense: {str(e)}")
 
 
-@admin_required
-async def approve_expense_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /approve_expense <id> command"""
-    is_valid, args, error = parse_command_args(update.message.text, 1)
-    
-    if not is_valid:
-        await update.message.reply_text(
-            "Usage: /approve_expense <expense_id>\n"
-            "Example: /approve_expense abc123"
-        )
-        return
-    
-    expense_id = args[0]
-    user_info = get_user_info(update)
-    
-    try:
-        # Call synchronous function
-        expense = expense_service.approve_expense(expense_id, str(user_info["id"]))
-        
-        if not expense:
-            await update.message.reply_text("❌ Expense not found")
-            return
-        
-        await update.message.reply_text(
-            f"✅ Expense approved!\n\n"
-            f"{format_expense_summary(expense)}",
-            parse_mode="Markdown"
-        )
-    except Exception as e:
-        await update.message.reply_text(f"Error approving expense: {str(e)}")
-
-
-@admin_required
-async def reject_expense_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /reject_expense <id> <reason> command"""
-    is_valid, args, error = parse_command_args(update.message.text, 2)
-    
-    if not is_valid:
-        await update.message.reply_text(
-            "Usage: /reject_expense <expense_id> <reason>\n"
-            "Example: /reject_expense abc123 Missing receipt"
-        )
-        return
-    
-    expense_id, reason = args
-    
-    try:
-        # Call synchronous function
-        expense = expense_service.reject_expense(expense_id, reason)
-        
-        if not expense:
-            await update.message.reply_text("❌ Expense not found")
-            return
-        
-        await update.message.reply_text(
-            f"❌ Expense rejected\n\n"
-            f"Reason: {reason}\n\n"
-            f"{format_expense_summary(expense)}",
-            parse_mode="Markdown"
-        )
-    except Exception as e:
-        await update.message.reply_text(f"Error rejecting expense: {str(e)}")
-
-
-# Single-message expense creation
+# Single-message expense creation with improved form
 @admin_required
 async def add_expense_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Start add expense - single message format"""
+    """Start add expense - improved form response"""
     help_text = (
         "💰 *Add New Expense*\n\n"
-        "Please send all details in one message using this format:\n\n"
-        "```\n"
-        "Amount: 1500\n"
-        "Detail: Office supplies purchase\n"
-        "Date: 2025-12-14\n"
-        "Notes: Pens, paper, and notebooks\n"
-        "```\n\n"
-        "📋 *Format Guide:*\n"
-        "• `Amount:` Required - expense amount (₹)\n"
-        "• `Detail:` Required - what was purchased\n"
-        "• `Date:` Optional - transaction date (YYYY-MM-DD)\n"
-        "• `Notes:` Optional - additional information\n\n"
-        "💡 *Example:*\n"
-        "```\n"
-        "Amount: 2500\n"
-        "Detail: Client lunch meeting\n"
-        "Date: 2025-12-14\n"
-        "Notes: 3 people at Taj restaurant\n"
-        "```\n\n"
-        "Send your expense details now, or /cancel to stop."
+        "Please provide your expense details in the following format:\n\n"
+        "*Required Fields:*\n"
+        "┣ Amount: _expense amount in ₹_\n"
+        "┗ Description: _what was purchased/paid for_\n\n"
+        "*Optional Fields:*\n"
+        "┣ Date: _transaction date (YYYY-MM-DD)_\n"
+        "┗ Category: _expense category_\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "*Example Message:*\n\n"
+        "`Amount: 2500`\n"
+        "`Description: Client lunch meeting at Taj`\n"
+        "`Date: 2025-12-14`\n"
+        "`Category: Marketing`\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "💡 *Quick Tips:*\n"
+        "• Each field on a new line\n"
+        "• Date defaults to today if not provided\n"
+        "• Amount can be written as: 1500 or 1,500 or 1500.50\n\n"
+        "Send your expense details now 👇\n"
+        "Or use /cancel to stop"
     )
     
     await update.message.reply_text(help_text, parse_mode="Markdown")
-    return EXPENSE_TITLE  # Reuse state for single message
+    return EXPENSE_TITLE
 
 
 async def add_expense_title(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -207,12 +118,12 @@ async def add_expense_title(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             if key in ['amount', 'amt', 'price', 'cost']:
                 expense_data['amount'] = value
-            elif key in ['detail', 'details', 'description', 'desc', 'title']:
-                expense_data['detail'] = value
+            elif key in ['description', 'desc', 'detail', 'details', 'title']:
+                expense_data['description'] = value
             elif key in ['date', 'transaction date', 'expense date']:
                 expense_data['date'] = value
-            elif key in ['notes', 'note', 'additional notes', 'comments']:
-                expense_data['notes'] = value
+            elif key in ['category', 'cat', 'type']:
+                expense_data['category'] = value
     
     # Validate required fields
     errors = []
@@ -226,8 +137,8 @@ async def add_expense_title(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             expense_data['amount'] = amount
     
-    if 'detail' not in expense_data:
-        errors.append("❌ Detail/Description is required")
+    if 'description' not in expense_data:
+        errors.append("❌ Description is required")
     
     # Validate optional date
     if 'date' in expense_data:
@@ -247,12 +158,10 @@ async def add_expense_title(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             f"{error_msg}\n\n"
             "Please try again with the correct format:\n\n"
-            "```\n"
-            "Amount: 1500\n"
-            "Detail: Office supplies\n"
-            "Date: 2025-12-14\n"
-            "Notes: Optional notes\n"
-            "```",
+            "`Amount: 1500`\n"
+            "`Description: Office supplies`\n"
+            "`Date: 2025-12-14`\n"
+            "`Category: Office`",
             parse_mode="Markdown"
         )
         return EXPENSE_TITLE
@@ -260,34 +169,27 @@ async def add_expense_title(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Create the expense
     try:
         expense = ExpenseCreate(
-            title=expense_data['detail'][:50],  # Use first 50 chars as title
-            description=expense_data['detail'],
+            title=expense_data['description'][:100],  # Use first 100 chars as title
+            description=expense_data['description'],
             amount=expense_data['amount'],
-            category="other",  # Default category
-            priority="medium",  # Default priority
-            expense_date=expense_data['date'],
-            payment_method="cash",  # Default payment method
-            notes=expense_data.get('notes'),
-            vendor=None
+            transaction_date=expense_data['date'],
+            category=expense_data.get('category')
         )
         
         created_expense = expense_service.create_expense(expense, user_info['id'])
         
         # Format success message
         success_msg = (
-            "✅ *Expense Created Successfully!*\n\n"
+            "✅ *Expense Recorded Successfully!*\n\n"
             f"💰 *Amount:* ₹{created_expense.amount:,.2f}\n"
-            f"📝 *Detail:* {created_expense.description}\n"
-            f"📅 *Date:* {created_expense.expense_date}\n"
+            f"📝 *Description:* {created_expense.description}\n"
+            f"📅 *Date:* {created_expense.transaction_date}\n"
         )
         
-        if created_expense.notes:
-            success_msg += f"📌 *Notes:* {created_expense.notes}\n"
+        if created_expense.category:
+            success_msg += f"🏷️ *Category:* {created_expense.category}\n"
         
-        success_msg += (
-            f"\n🆔 *ID:* `{created_expense.id}`\n"
-            f"⏳ *Status:* {created_expense.status.upper()}\n"
-        )
+        success_msg += f"\n🆔 *ID:* `{created_expense.id}`\n"
         
         await update.message.reply_text(success_msg, parse_mode="Markdown")
         
@@ -320,62 +222,40 @@ def add_expense_conversation():
     )
 
 
-async def handle_expense_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle expense-related callback queries"""
-    query = update.callback_query
-    data = query.data
-    
-    if data.startswith("expense_approve_"):
-        expense_id = data.replace("expense_approve_", "")
-        user_info = get_user_info(update)
-        
-        try:
-            # Call synchronous function
-            expense = expense_service.approve_expense(expense_id, str(user_info["id"]))
-            if expense:
-                await query.edit_message_text(
-                    f"✅ Expense approved!\n\n{format_expense_summary(expense)}",
-                    parse_mode="Markdown"
-                )
-            else:
-                await query.edit_message_text("❌ Expense not found")
-        except Exception as e:
-            await query.edit_message_text(f"❌ Error: {str(e)}")
-    
-    elif data.startswith("expense_reject_"):
-        expense_id = data.replace("expense_reject_", "")
-        await query.edit_message_text(
-            f"To reject this expense, use:\n"
-            f"/reject_expense {expense_id} <reason>"
-        )
-    
-    elif data.startswith("expense_filter_"):
-        status_filter = data.replace("expense_filter_", "")
-        
-        try:
-            # Call synchronous function
-            if status_filter == "all":
-                expenses = expense_service.get_expenses(limit=10)
-            else:
-                expenses = expense_service.get_expenses(status=status_filter)
-            
-            if not expenses:
-                await query.edit_message_text(f"No expenses found with status: {status_filter}")
-                return
-            
-            message = format_list_header(f"Expenses - {status_filter.title()}", len(expenses))
-            
-            for expense in expenses[:10]:
-                message += f"\n{format_expense_summary(expense)}\n---\n"
-            
-            await query.edit_message_text(message, parse_mode="Markdown")
-        except Exception as e:
-            await query.edit_message_text(f"❌ Error: {str(e)}")
-
-
 @admin_required
-async def update_expense_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /update_expense command"""
-    await update.message.reply_text(
-        "To update an expense, use /expense <id> to view it first."
-    )
+async def delete_expense_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /delete_expense <id> command"""
+    is_valid, args, error = parse_command_args(update.message.text, 1)
+    
+    if not is_valid:
+        await update.message.reply_text(
+            "Usage: /delete_expense <expense_id>\n"
+            "Example: /delete_expense abc123"
+        )
+        return
+    
+    expense_id = args[0]
+    
+    try:
+        # Get expense first to show what's being deleted
+        expense = expense_service.get_expense_by_id(expense_id)
+        
+        if not expense:
+            await update.message.reply_text("❌ Expense not found")
+            return
+        
+        # Delete the expense
+        deleted = expense_service.delete_expense(expense_id)
+        
+        if deleted:
+            await update.message.reply_text(
+                f"✅ Expense deleted successfully!\n\n"
+                f"Deleted: {expense.title}\n"
+                f"Amount: ₹{expense.amount:,.2f}",
+                parse_mode="Markdown"
+            )
+        else:
+            await update.message.reply_text("❌ Failed to delete expense")
+            
+    except Exception as e:
+        await update.message.reply_text(f"Error deleting expense: {str(e)}")

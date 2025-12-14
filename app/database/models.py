@@ -206,81 +206,13 @@ class Category(BaseModel):
 # Expense Models
 # ============================================================================
 
-ExpenseStatus = Literal[
-    "pending",
-    "approved",
-    "rejected",
-    "paid",
-    "cancelled"
-]
-
-ExpenseCategory = Literal[
-    "office_supplies",
-    "travel",
-    "marketing",
-    "software",
-    "equipment",
-    "utilities",
-    "professional_services",
-    "training",
-    "maintenance",
-    "other"
-]
-
-ExpensePriority = Literal["low", "medium", "high", "urgent"]
-
-ExpensePaymentMethod = Literal[
-    "company_card",
-    "reimbursement",
-    "direct_payment",
-    "bank_transfer"
-]
-
-
-class ExpenseAttachment(BaseModel):
-    """Expense attachment information"""
-    id: str
-    filename: str
-    file_path: str
-    file_size: int
-    mime_type: str
-    uploaded_at: str
-
-
-class ExpenseCategoryData(BaseModel):
-    """Expense category information"""
-    id: str
-    name: str
-    slug: str
-    display_name: str
-    description: Optional[str] = None
-    color: str
-    icon: str
-    is_active: bool
-    is_system: bool
-    sort_order: int
-    created_by: Optional[str] = None
-    created_at: str
-    updated_at: str
-    
-    model_config = ConfigDict(from_attributes=True)
-
-
 class ExpenseBase(BaseModel):
-    """Base expense information"""
+    """Base expense information - simplified for recording completed transactions"""
     title: str
     description: Optional[str] = None
     amount: float
-    category: ExpenseCategory
-    category_id: Optional[str] = None
-    priority: ExpensePriority
-    expense_date: str
-    vendor: Optional[str] = None
-    payment_method: ExpensePaymentMethod
-    receipt_url: Optional[str] = None
-    attachments: Optional[List[ExpenseAttachment]] = None
-    notes: Optional[str] = None
-    tags: Optional[List[str]] = None
+    transaction_date: str
+    category: Optional[str] = None
 
 
 class ExpenseCreate(ExpenseBase):
@@ -293,29 +225,16 @@ class ExpenseUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     amount: Optional[float] = None
-    category: Optional[ExpenseCategory] = None
-    category_id: Optional[str] = None
-    priority: Optional[ExpensePriority] = None
-    expense_date: Optional[str] = None
-    vendor: Optional[str] = None
-    payment_method: Optional[ExpensePaymentMethod] = None
-    receipt_url: Optional[str] = None
-    notes: Optional[str] = None
-    tags: Optional[List[str]] = None
-    status: Optional[ExpenseStatus] = None
+    transaction_date: Optional[str] = None
+    category: Optional[str] = None
 
 
 class Expense(ExpenseBase):
     """Complete expense model"""
     id: str
     user_id: str
-    status: ExpenseStatus
-    approved_by: Optional[str] = None
-    approved_at: Optional[str] = None
-    rejected_reason: Optional[str] = None
     created_at: str
     updated_at: str
-    category_data: Optional[ExpenseCategoryData] = None
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -339,13 +258,7 @@ class OrderStats(BaseModel):
 class ExpenseStats(BaseModel):
     """Expense statistics"""
     total_expenses: int
-    pending_expenses: int
-    approved_expenses: int
-    rejected_expenses: int
-    paid_expenses: int
     total_amount: float
-    pending_amount: float
-    approved_amount: float
 
 
 class ProductStats(BaseModel):
