@@ -11,13 +11,13 @@ from dotenv import load_dotenv
 # Add app directory to Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# Load .env.test file if it exists
-env_test_path = Path(__file__).parent.parent / '.env.test'
-if env_test_path.exists():
-    load_dotenv(env_test_path, override=True)
-    print(f"✅ Loaded environment variables from {env_test_path}")
+# Load .env file if it exists
+env_path = Path(__file__).parent.parent / '.env'
+if env_path.exists():
+    load_dotenv(env_path, override=True)
+    print(f"✅ Loaded environment variables from {env_path}")
 else:
-    print(f"⚠️  Warning: {env_test_path} not found. Using default/OS environment variables.")
+    print(f"⚠️  Warning: {env_path} not found. Using default/OS environment variables.")
 
 # Set test environment variables before importing app modules
 os.environ['TESTING'] = 'true'

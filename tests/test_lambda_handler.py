@@ -18,7 +18,7 @@ os.environ.setdefault('SUPABASE_URL', 'https://test.supabase.co')
 os.environ.setdefault('SUPABASE_KEY', 'test_key')
 os.environ.setdefault('ADMIN_USER_IDS', '123456789')
 
-from lambda_handler import lambda_handler
+from app.lambda_handler import lambda_handler
 
 
 class MockContext:

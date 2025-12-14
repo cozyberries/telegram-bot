@@ -27,7 +27,7 @@ Main Lambda handler with proper event loop management:
 - Proper error handling and logging
 ```
 
-**Location:** `/telegram-bot/lambda_handler.py`
+**Location:** `/telegram-bot/app/lambda_handler.py`
 
 ### 2. **app/bot/bot.py** (UPDATED)
 
@@ -46,7 +46,7 @@ def stop(self):
 1. **Update Lambda function configuration:**
    ```bash
    # In AWS Lambda Console or via AWS CLI
-   Handler: lambda_handler.lambda_handler
+   Handler: app.lambda_handler.lambda_handler
    ```
 
 2. **Or in your deployment config (serverless.yml, SAM template, etc.):**
@@ -54,7 +54,7 @@ def stop(self):
    # serverless.yml example
    functions:
      telegram-bot:
-       handler: lambda_handler.lambda_handler
+       handler: app.lambda_handler.lambda_handler
        events:
          - http:
              path: /webhook
@@ -65,7 +65,7 @@ def stop(self):
    ```python
    lambda_function = lambda_.Function(
        self, "TelegramBot",
-       handler="lambda_handler.lambda_handler",
+       handler="app.lambda_handler.lambda_handler",
        # ... other config
    )
    ```
@@ -108,7 +108,7 @@ ADMIN_USER_IDS=comma,separated,user,ids
 
 ```bash
 # Run the test at the bottom of lambda_handler.py
-python lambda_handler.py
+python -m pytest tests/test_lambda_handler.py
 ```
 
 ### 2. Test in Lambda
@@ -198,7 +198,7 @@ logger.info(f"📨 Processing update: {update_id}")
 
 1. **Check handler name:**
    ```bash
-   # Should be: lambda_handler.lambda_handler
+   # Should be: app.lambda_handler.lambda_handler
    aws lambda get-function-configuration --function-name your-function-name
    ```
 
@@ -236,8 +236,8 @@ If bot takes too long to initialize:
 
 ## Deployment Checklist
 
-- [ ] `lambda_handler.py` added to deployment package
-- [ ] Lambda handler updated to `lambda_handler.lambda_handler`
+- [ ] `app/lambda_handler.py` added to deployment package
+- [ ] Lambda handler updated to `app.lambda_handler.lambda_handler`
 - [ ] Environment variables configured
 - [ ] Timeout set to at least 30 seconds
 - [ ] Memory set to at least 512 MB
@@ -259,7 +259,7 @@ If you continue to experience issues:
 
 1. Check CloudWatch logs for detailed error messages
 2. Verify environment variables are set correctly
-3. Test locally first using `python lambda_handler.py`
+3. Test locally first using `python -m pytest tests/test_lambda_handler.py`
 4. Ensure Telegram webhook is pointed to the correct URL
 
 ---

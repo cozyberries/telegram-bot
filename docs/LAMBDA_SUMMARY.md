@@ -12,7 +12,7 @@
 
 ## Solution Implemented
 
-### 1. Created Lambda-Specific Handler (`lambda_handler.py`)
+### 1. Created Lambda-Specific Handler (`app/lambda_handler.py`)
 
 **Key Features:**
 - ✅ **Event Loop Management**: Creates new loop when closed
@@ -45,7 +45,7 @@ def lambda_handler(event, context):
 loop.run_until_complete(self.application.initialize())
 ```
 
-### 3. Created Test Suite (`test_lambda_handler.py`)
+### 3. Created Test Suite (`tests/test_lambda_handler.py`)
 
 **Tests:**
 - ✅ Health check endpoint
@@ -123,7 +123,7 @@ Invocation 3: Reuse loop → Process → Keep open ✅
 # serverless.yml
 functions:
   telegram-bot:
-    handler: lambda_handler.lambda_handler
+    handler: app.lambda_handler.lambda_handler
     timeout: 30
     memorySize: 512
     environment:
@@ -161,7 +161,7 @@ aws lambda update-function-configuration \
 
 ### 1. Local Test
 ```bash
-python test_lambda_handler.py
+python -m pytest tests/test_lambda_handler.py
 ```
 
 ### 2. Lambda Test Console
@@ -259,15 +259,15 @@ If issues persist:
 
 1. **Check CloudWatch logs** for detailed error messages
 2. **Verify environment variables** are set correctly
-3. **Test locally** with `python test_lambda_handler.py`
+3. **Test locally** with `python -m pytest tests/test_lambda_handler.py`
 4. **Check Lambda timeout** (should be at least 30s)
 5. **Check Lambda memory** (should be at least 512MB)
 
 ## Related Documentation
 
 - `LAMBDA_FIX.md` - Detailed deployment guide
-- `test_lambda_handler.py` - Local test suite
-- `lambda_handler.py` - Main handler implementation
+- `tests/test_lambda_handler.py` - Local test suite
+- `app/lambda_handler.py` - Main handler implementation
 
 ---
 
