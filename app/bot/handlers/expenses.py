@@ -374,6 +374,10 @@ def add_expense_conversation():
             ],
         },
         fallbacks=[CommandHandler("cancel", cancel_expense_conversation)],
+        per_message=True,  # Track per message (fixes PTB warning with CallbackQueryHandler)
+        per_chat=True,
+        per_user=True,
+        allow_reentry=True
     )
 
 
