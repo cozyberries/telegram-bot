@@ -1,19 +1,41 @@
-"""Expense service for database operations"""
+"""
+Simplified expense service for database operations
 
-from typing import List, Optional
-from datetime import datetime
+Simplified expense table schema:
+- id (uuid, primary key)
+- title (text)
+- description (text)
+- amount (decimal)
+- expense_date (date)
+- paid_by (uuid, user reference)
+- created_at (timestamp)
+- updated_at (timestamp)
+"""
+
+from typing import Optional
 from decimal import Decimal
-
 from app.database.supabase_client import supabase
-from app.database.models import Expense, ExpenseCreate, ExpenseUpdate
 from app.schemas.expenses import (
     ExpenseInput,
     ExpenseResponse,
-    ExpenseListResponse,
+    ExpenseUpdate,
     ExpenseDeleteResponse,
+    ExpenseListResponse,
+    ListMetadata,
     ExpenseStats
 )
-from app.schemas.common import ListMetadata
+
+
+def get_expense_by_id(expense_id: str) -> Optional[ExpenseResponse]:
+    """Get a single expense by ID"""
+    response = supabase.table("expenses")\
+        .select("*")\
+        .eq("id", expense_id)\
+        .execute()
+    
+    if response.data and len(response.data) > 0:
+        return ExpenseResponse(**response.data[0])
+    return None
 
 
 def get_expenses(
@@ -28,10 +50,10 @@ def get_expenses(
     
     total = count_response.count or 0
     
-    # Get expenses - order by created_at instead of transaction_date
+    # Get expenses - order by expense_date
     response = supabase.table("expenses")\
         .select("*")\
-        .order("created_at", desc=True)\
+        .order("expense_date", desc=True)\
         .range(offset, offset + limit - 1)\
         .execute()
     
@@ -47,30 +69,15 @@ def get_expenses(
     return ExpenseListResponse(expenses=expenses, metadata=metadata)
 
 
-def get_expense_by_id(expense_id: str) -> Optional[ExpenseResponse]:
-    """Get expense by ID"""
-    response = supabase.table("expenses")\
-        .select("*")\
-        .eq("id", expense_id)\
-        .execute()
-    
-    if response.data and len(response.data) > 0:
-        return ExpenseResponse(**response.data[0])
-    return None
-
-
 def create_expense(expense_input: ExpenseInput) -> ExpenseResponse:
-    """Create a new expense from validated input"""
+    """Create a new expense with simplified schema"""
     data = {
         "title": expense_input.title,
         "description": expense_input.description,
         "amount": float(expense_input.amount),
-        "category": expense_input.category,
-        "user_id": expense_input.user_id
+        "expense_date": expense_input.expense_date.isoformat(),
+        "paid_by": expense_input.user_id
     }
-    
-    # Remove None values
-    data = {k: v for k, v in data.items() if v is not None}
     
     response = supabase.table("expenses")\
         .insert(data)\
@@ -149,14 +156,10 @@ def get_expense_count() -> int:
     response = supabase.table("expenses")\
         .select("id", count="exact")\
         .execute()
-    
     return response.count or 0
 
 
-def get_total_expense_amount() -> float:
-    """Calculate total expense amount (backward compatibility)"""
-    response = supabase.table("expenses")\
-        .select("amount")\
-        .execute()
-    
-    return sum(exp["amount"] for exp in response.data)
+def get_recent_expenses(limit: int = 10) -> list[ExpenseResponse]:
+    """Get recent expenses (backward compatibility)"""
+    result = get_expenses(limit=limit, offset=0)
+    return result.expenses

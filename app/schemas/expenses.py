@@ -1,43 +1,37 @@
-"""Pydantic schemas for expense operations"""
+"""
+Simplified expense schemas for Telegram bot
 
-from typing import Optional, List
-from pydantic import BaseModel, Field, field_validator
-from datetime import datetime, date
+Expense table now only has:
+- title
+- description
+- amount
+- expense_date
+- paid_by (user_id)
+"""
+
 from decimal import Decimal
+from datetime import date, datetime
+from typing import Optional
+from pydantic import BaseModel, Field, field_validator
 
-from app.schemas.common import CommandInput, ListMetadata
+
+class CommandInput(BaseModel):
+    """Base class for command inputs"""
+    user_id: str
+    username: str
 
 
 class ExpenseInput(CommandInput):
-    """Input schema for creating/updating expenses"""
+    """Simplified input schema for creating expenses"""
     amount: Decimal = Field(..., gt=0, description="Expense amount (must be positive)")
     description: str = Field(..., min_length=3, max_length=500, description="Expense description")
-    transaction_date: Optional[date] = Field(None, description="Transaction date (optional, will use created_at if not provided)")
-    category: Optional[str] = Field(None, max_length=100, description="Expense category")
-    
-    @field_validator('transaction_date', mode='before')
-    @classmethod
-    def validate_date(cls, v):
-        """Validate date if provided"""
-        if v is None:
-            return None
-        if isinstance(v, str):
-            return datetime.strptime(v, '%Y-%m-%d').date()
-        return v
+    expense_date: date = Field(default_factory=date.today, description="Expense date (defaults to today)")
     
     @field_validator('description')
     @classmethod
     def clean_description(cls, v: str) -> str:
         """Clean and validate description"""
         return v.strip()
-    
-    @field_validator('category')
-    @classmethod
-    def clean_category(cls, v: Optional[str]) -> Optional[str]:
-        """Clean category if provided"""
-        if v:
-            return v.strip()
-        return v
     
     @property
     def title(self) -> str:
@@ -47,19 +41,18 @@ class ExpenseInput(CommandInput):
     class Config:
         json_encoders = {
             Decimal: lambda v: float(v),
-            date: lambda v: v.isoformat() if v else None
+            date: lambda v: v.isoformat()
         }
 
 
 class ExpenseResponse(BaseModel):
-    """Response schema for expense operations"""
+    """Simplified response schema for expense operations"""
     id: str
     title: str
     description: str
     amount: Decimal
-    transaction_date: Optional[date] = None  # Made optional as column may not exist
-    category: Optional[str] = None
-    user_id: str
+    expense_date: date
+    paid_by: str  # user_id
     created_at: datetime
     updated_at: datetime
     
@@ -70,9 +63,8 @@ class ExpenseResponse(BaseModel):
     
     @property
     def formatted_date(self) -> str:
-        """Format date for display - use created_at if transaction_date not available"""
-        display_date = self.transaction_date or self.created_at.date()
-        return display_date.strftime("%d %b %Y")
+        """Format date for display"""
+        return self.expense_date.strftime("%d %b %Y")
     
     def to_telegram_message(self) -> str:
         """Convert to formatted Telegram message"""
@@ -81,9 +73,6 @@ class ExpenseResponse(BaseModel):
             f"*Amount:* {self.formatted_amount}\n"
             f"*Date:* {self.formatted_date}\n"
         )
-        
-        if self.category:
-            message += f"*Category:* {self.category}\n"
         
         if self.description != self.title:
             message += f"\n{self.description}\n"
@@ -101,63 +90,56 @@ class ExpenseResponse(BaseModel):
         }
 
 
-class ExpenseListResponse(BaseModel):
-    """Response schema for listing expenses"""
-    expenses: List[ExpenseResponse]
-    metadata: ListMetadata
-    
-    def to_telegram_message(self) -> str:
-        """Convert to formatted Telegram message"""
-        if not self.expenses:
-            return "No expenses found."
-        
-        message = f"📋 *Recent Expenses*\n\n_Found {self.metadata.total} items_\n"
-        
-        for expense in self.expenses:
-            message += f"\n{expense.to_telegram_message()}\n---\n"
-        
-        return message
+class ExpenseUpdate(BaseModel):
+    """Schema for updating expenses"""
+    title: Optional[str] = None
+    description: Optional[str] = None
+    amount: Optional[Decimal] = Field(None, gt=0)
+    expense_date: Optional[date] = None
 
 
 class ExpenseDeleteResponse(BaseModel):
-    """Response schema for deleting an expense"""
+    """Response schema for expense deletion"""
     success: bool
     expense_id: str
     title: str
     amount: Decimal
     
     def to_telegram_message(self) -> str:
-        """Convert to formatted Telegram message"""
-        if self.success:
-            return (
-                f"✅ Expense deleted successfully!\n\n"
-                f"Deleted: {self.title}\n"
-                f"Amount: ₹{self.amount:,.2f}"
-            )
-        return "❌ Failed to delete expense"
-    
-    class Config:
-        json_encoders = {
-            Decimal: lambda v: float(v)
-        }
+        """Format deletion response for Telegram"""
+        return (
+            f"✅ Expense deleted successfully!\n\n"
+            f"*{self.title}*\n"
+            f"Amount: ₹{self.amount:,.2f}\n"
+            f"ID: `{self.expense_id}`"
+        )
+
+
+class ListMetadata(BaseModel):
+    """Metadata for paginated lists"""
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
+
+
+class ExpenseListResponse(BaseModel):
+    """Response schema for expense list with pagination"""
+    expenses: list[ExpenseResponse]
+    metadata: ListMetadata
 
 
 class ExpenseStats(BaseModel):
-    """Response schema for expense statistics"""
+    """Simplified expense statistics"""
     total_expenses: int
     total_amount: Decimal
     average_expense: Decimal
     
     def to_telegram_message(self) -> str:
-        """Convert to formatted Telegram message"""
+        """Format stats for Telegram display"""
         return (
-            "📊 *Expense Statistics*\n\n"
-            f"*Total Expenses:* {self.total_expenses}\n"
-            f"*Total Amount:* ₹{self.total_amount:,.2f}\n"
-            f"*Avg Expense:* ₹{self.average_expense:,.2f}\n"
+            f"📊 *Expense Statistics*\n\n"
+            f"📝 *Total Expenses:* {self.total_expenses}\n"
+            f"💰 *Total Amount:* ₹{self.total_amount:,.2f}\n"
+            f"📊 *Avg Expense:* ₹{self.average_expense:,.2f}\n"
         )
-    
-    class Config:
-        json_encoders = {
-            Decimal: lambda v: float(v)
-        }
