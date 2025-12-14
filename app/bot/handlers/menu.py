@@ -140,10 +140,14 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle all menu callbacks"""
     query = update.callback_query
-    await query.answer()
-    
     data = query.data
     user = update.effective_user
+    
+    # Answer callback query first to prevent timeout
+    try:
+        await query.answer()
+    except Exception as e:
+        logger.warning(f"Failed to answer callback query: {e}")
     
     # Main menu navigation
     if data == "menu_main":
@@ -151,11 +155,14 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     
     elif data == "menu_expenses":
         text = "💰 *Expense Management*\n\nSelect an action:"
-        await query.edit_message_text(
-            text,
-            parse_mode="Markdown",
-            reply_markup=get_expenses_menu_keyboard()
-        )
+        try:
+            await query.edit_message_text(
+                text,
+                parse_mode="Markdown",
+                reply_markup=get_expenses_menu_keyboard()
+            )
+        except Exception as e:
+            logger.error(f"Failed to edit message: {e}")
     
     elif data == "menu_help":
         help_text = (
@@ -179,11 +186,14 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             "💡 *Tip:* All operations are accessible through interactive menus!"
         )
         keyboard = [[InlineKeyboardButton("« Back to Main Menu", callback_data="menu_main")]]
-        await query.edit_message_text(
-            help_text,
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        try:
+            await query.edit_message_text(
+                help_text,
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        except Exception as e:
+            logger.error(f"Failed to edit message: {e}")
     
     elif data == "noop":
         # No operation - for page indicator button

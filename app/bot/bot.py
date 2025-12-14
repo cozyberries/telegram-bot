@@ -131,6 +131,12 @@ class TelegramBot:
         
         # Route to appropriate handler based on callback data prefix
         try:
+            # Answer callback query early to prevent timeout
+            try:
+                await query.answer()
+            except Exception as e:
+                logger.warning(f"Failed to answer callback query early: {e}")
+            
             # Menu navigation
             if data.startswith("menu_"):
                 from app.bot.handlers import menu
@@ -144,7 +150,7 @@ class TelegramBot:
                     await expenses.handle_expense_browser_callback(update, context)
                 else:
                     # Handle expense conversation menu callbacks
-                    await query.answer("Expense menu action processed")
+                    pass  # Already answered above
             
             elif data.startswith("expenses_"):
                 # Handle expenses interactive menu
@@ -153,16 +159,18 @@ class TelegramBot:
             
             # No-op (for pagination indicators)
             elif data == "noop":
-                await query.answer()
+                pass  # Already answered above
             
             # Unknown callback
             else:
-                await query.answer("Unknown action")
                 logger.warning(f"Unhandled callback data: {data}")
         
         except Exception as e:
             logger.error(f"Error handling callback query: {e}", exc_info=True)
-            await query.answer(f"Error: {str(e)}", show_alert=True)
+            try:
+                await query.answer(f"Error: {str(e)}", show_alert=True)
+            except Exception:
+                pass  # Ignore if we can't send error
     
     async def _error_handler(self, update: Update, context):
         """Handle errors"""

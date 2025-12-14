@@ -2,8 +2,11 @@
 Expenses menu callback handlers for interactive navigation
 """
 
+import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
+
+logger = logging.getLogger(__name__)
 
 
 async def handle_expenses_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -11,10 +14,19 @@ async def handle_expenses_menu(update: Update, context: ContextTypes.DEFAULT_TYP
     query = update.callback_query
     data = query.data
     
+    # Answer callback query first if not already done
+    try:
+        await query.answer()
+    except Exception as e:
+        pass  # Ignore if already answered
+    
     if data == "expenses_list_all":
         from app.bot.handlers import expenses
         # Redirect to list expenses
-        await expenses.list_expenses_command(update, context)
+        try:
+            await expenses.list_expenses_command(update, context)
+        except Exception as e:
+            logger.error(f"Failed to list expenses: {e}")
     
     elif data == "expenses_create":
         from app.bot.handlers import expenses
@@ -28,16 +40,22 @@ async def handle_expenses_menu(update: Update, context: ContextTypes.DEFAULT_TYP
             [InlineKeyboardButton("Start Adding Expense", callback_data="start_add_expense")],
             [InlineKeyboardButton("« Back", callback_data="menu_expenses")]
         ]
-        await query.edit_message_text(
-            text,
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        try:
+            await query.edit_message_text(
+                text,
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        except Exception as e:
+            logger.error(f"Failed to edit message: {e}")
     
     elif data == "start_add_expense":
         from app.bot.handlers import expenses
         # Trigger add_expense_start
-        await expenses.add_expense_start(update, context)
+        try:
+            await expenses.add_expense_start(update, context)
+        except Exception as e:
+            logger.error(f"Failed to start add expense: {e}")
     
     elif data == "expenses_stats":
         from app.services import expense_service
@@ -52,6 +70,8 @@ async def handle_expenses_menu(update: Update, context: ContextTypes.DEFAULT_TYP
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
         except Exception as e:
-            await query.answer(f"Error: {str(e)}", show_alert=True)
-    
-    await query.answer()
+            logger.error(f"Failed to show stats: {e}")
+            try:
+                await query.answer(f"Error: {str(e)}", show_alert=True)
+            except Exception:
+                pass
