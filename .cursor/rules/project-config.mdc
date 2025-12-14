@@ -1,3 +1,7 @@
+---
+description: Before running any python script
+alwaysApply: false
+---
 # CozyBerries Telegram Bot - Project Configuration Rules
 
 ## Python Environment

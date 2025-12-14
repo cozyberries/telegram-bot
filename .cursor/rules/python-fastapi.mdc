@@ -1,3 +1,6 @@
+---
+alwaysApply: true
+---
 # Python & FastAPI Development Rules
 
 You are an expert in Python, FastAPI, and scalable API development.
