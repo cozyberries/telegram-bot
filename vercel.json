@@ -8,15 +8,15 @@
   ],
   "routes": [
     {
-      "src": "/api/webhook",
+      "src": "/webhook",
       "dest": "/api/webhook.py"
     },
     {
-      "src": "/api/notify-order",
+      "src": "/notify-order",
       "dest": "/api/notify-order.py"
     },
     {
-      "src": "/api/health",
+      "src": "/health",
       "dest": "/api/health.py"
     }
   ],
