@@ -27,7 +27,36 @@ async def list_expenses_command(update: Update, context: ContextTypes.DEFAULT_TY
         await show_expense_page(update, context, offset=0)
     except Exception as e:
         await update.message.reply_text(f"Error fetching expenses: {str(e)}")
-
+@admin_required
+async def get_expense_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /expense <id> command - get expense details"""
+    is_valid, args, error = parse_command_args(update.message.text, 1)
+    
+    if not is_valid:
+        await update.message.reply_text(
+            "Usage: /expense <expense_id>\n"
+            "Example: /expense 123e4567-e89b-12d3-a456-426614174000"
+        )
+        return
+    
+    expense_id = args[0]
+    
+    try:
+        expense = expense_service.get_expense_by_id(expense_id)
+        
+        if not expense:
+            await update.message.reply_text("❌ Expense not found")
+            return
+        
+        # Use the response's built-in formatting
+        message = expense.to_telegram_message()
+        
+        await update.message.reply_text(
+            message,
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        await update.message.reply_text(f"Error fetching expense: {str(e)}")
 
 async def show_expense_page(update: Update, context: ContextTypes.DEFAULT_TYPE, offset: int):
     """Show a specific expense page"""
