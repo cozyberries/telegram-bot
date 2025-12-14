@@ -17,8 +17,8 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         delivered_orders = await order_service.get_order_count("delivered")
         total_revenue = await order_service.get_total_revenue()
         
-        total_expenses = expense_service.get_expense_count()
-        total_expense_amount = expense_service.get_total_expense_amount()
+        # Use new Pydantic-based expense stats
+        expense_stats = expense_service.get_expense_stats()
         
         total_products = await product_service.get_product_count()
         low_stock_products = len(await product_service.get_low_stock_products())
@@ -28,11 +28,11 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "pending_orders": pending_orders,
             "delivered_orders": delivered_orders,
             "total_revenue": total_revenue,
-            "total_expenses": total_expenses,
-            "total_expense_amount": total_expense_amount,
+            "total_expenses": expense_stats.total_expenses,
+            "total_expense_amount": float(expense_stats.total_amount),
             "total_products": total_products,
             "low_stock_products": low_stock_products,
-            "net_profit": total_revenue - total_expense_amount,
+            "net_profit": total_revenue - float(expense_stats.total_amount),
         }
         
         message = format_stats_summary(stats)
@@ -78,19 +78,11 @@ async def stats_orders_command(update: Update, context: ContextTypes.DEFAULT_TYP
 
 @admin_required
 async def stats_expenses_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /stats_expenses command - expense statistics"""
+    """Handle /stats_expenses command - expense statistics using Pydantic models"""
     try:
-        total = expense_service.get_expense_count()
-        total_amount = expense_service.get_total_expense_amount()
-        
-        avg_expense = total_amount / total if total > 0 else 0
-        
-        message = (
-            "📊 *Expense Statistics*\n\n"
-            f"*Total Expenses:* {total}\n"
-            f"*Total Amount:* {format_currency(total_amount)}\n"
-            f"*Avg Expense:* {format_currency(avg_expense)}\n"
-        )
+        # Use new Pydantic-based stats with built-in formatting
+        stats = expense_service.get_expense_stats()
+        message = stats.to_telegram_message()
         
         await update.message.reply_text(message, parse_mode="Markdown")
     except Exception as e:

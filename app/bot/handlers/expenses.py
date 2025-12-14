@@ -1,32 +1,28 @@
-"""Expense CRUD command handlers"""
+"""Expense CRUD command handlers - Refactored with Pydantic models"""
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler, CommandHandler, MessageHandler, filters
+from pydantic import ValidationError
+from decimal import Decimal
+
 from app.bot.middleware.auth import admin_required, get_user_info
 from app.services import expense_service
-from app.database.models import ExpenseCreate
-from app.utils.formatters import format_expense_summary, format_list_header
-from app.utils.validators import parse_command_args, validate_amount, validate_date
+from app.schemas.expenses import ExpenseInput
+from app.utils.parsers import ExpenseMessageParser, parse_command_args
 
 # Conversation states
-EXPENSE_TITLE = 0
+EXPENSE_INPUT = 0
 
 
 @admin_required
 async def list_expenses_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /expenses command - list expenses"""
+    """Handle /expenses command - list expenses using Pydantic models"""
     try:
-        # Call synchronous function
-        expenses = expense_service.get_expenses(limit=20)
+        # Get expenses with metadata
+        response = expense_service.get_expenses(limit=20)
         
-        if not expenses:
-            await update.message.reply_text("No expenses found.")
-            return
-        
-        message = format_list_header("Recent Expenses", len(expenses))
-        
-        for expense in expenses:
-            message += f"\n{format_expense_summary(expense)}\n---\n"
+        # Use the response's built-in formatting
+        message = response.to_telegram_message()
         
         await update.message.reply_text(
             message,
@@ -51,14 +47,14 @@ async def get_expense_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     expense_id = args[0]
     
     try:
-        # Call synchronous function
         expense = expense_service.get_expense_by_id(expense_id)
         
         if not expense:
             await update.message.reply_text("❌ Expense not found")
             return
         
-        message = format_expense_summary(expense)
+        # Use the response's built-in formatting
+        message = expense.to_telegram_message()
         
         await update.message.reply_text(
             message,
@@ -68,7 +64,6 @@ async def get_expense_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text(f"Error fetching expense: {str(e)}")
 
 
-# Single-message expense creation with improved form
 @admin_required
 async def add_expense_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start add expense - improved form response"""
@@ -97,107 +92,76 @@ async def add_expense_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     await update.message.reply_text(help_text, parse_mode="Markdown")
-    return EXPENSE_TITLE
+    return EXPENSE_INPUT
 
 
-async def add_expense_title(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Parse and create expense from single message"""
+async def add_expense_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Parse and create expense using Pydantic validation"""
     message_text = update.message.text.strip()
     user_info = get_user_info(update)
     
-    # Parse the message
-    lines = message_text.split('\n')
-    expense_data = {}
-    
-    for line in lines:
-        line = line.strip()
-        if ':' in line:
-            key, value = line.split(':', 1)
-            key = key.strip().lower()
-            value = value.strip()
-            
-            if key in ['amount', 'amt', 'price', 'cost']:
-                expense_data['amount'] = value
-            elif key in ['description', 'desc', 'detail', 'details', 'title']:
-                expense_data['description'] = value
-            elif key in ['date', 'transaction date', 'expense date']:
-                expense_data['date'] = value
-            elif key in ['category', 'cat', 'type']:
-                expense_data['category'] = value
-    
-    # Validate required fields
-    errors = []
-    
-    if 'amount' not in expense_data:
-        errors.append("❌ Amount is required")
-    else:
-        is_valid, amount, error = validate_amount(expense_data['amount'])
-        if not is_valid:
-            errors.append(f"❌ Invalid amount: {error}")
-        else:
-            expense_data['amount'] = amount
-    
-    if 'description' not in expense_data:
-        errors.append("❌ Description is required")
-    
-    # Validate optional date
-    if 'date' in expense_data:
-        is_valid, date, error = validate_date(expense_data['date'])
-        if not is_valid:
-            errors.append(f"❌ Invalid date: {error}")
-        else:
-            expense_data['date'] = date
-    else:
-        # Use today's date if not provided
-        from datetime import datetime
-        expense_data['date'] = datetime.now().strftime('%Y-%m-%d')
-    
-    # If there are errors, show them
-    if errors:
-        error_msg = "\n".join(errors)
-        await update.message.reply_text(
-            f"{error_msg}\n\n"
-            "Please try again with the correct format:\n\n"
-            "`Amount: 1500`\n"
-            "`Description: Office supplies`\n"
-            "`Date: 2025-12-14`\n"
-            "`Category: Office`",
-            parse_mode="Markdown"
-        )
-        return EXPENSE_TITLE
-    
-    # Create the expense
     try:
-        expense = ExpenseCreate(
-            title=expense_data['description'][:100],  # Use first 100 chars as title
-            description=expense_data['description'],
-            amount=expense_data['amount'],
-            transaction_date=expense_data['date'],
-            category=expense_data.get('category')
+        # Parse message using parser
+        parsed_data = ExpenseMessageParser.parse(message_text)
+        
+        # Validate required fields first
+        errors = ExpenseMessageParser.validate_required_fields(parsed_data)
+        
+        if errors:
+            error_msg = "\n".join(errors)
+            await update.message.reply_text(
+                f"{error_msg}\n\n"
+                "Please try again with the correct format:\n\n"
+                "`Amount: 1500`\n"
+                "`Description: Office supplies`\n"
+                "`Date: 2025-12-14`\n"
+                "`Category: Office`",
+                parse_mode="Markdown"
+            )
+            return EXPENSE_INPUT
+        
+        # Create Pydantic model with validation
+        expense_input = ExpenseInput(
+            user_id=str(user_info['id']),
+            username=user_info.get('username'),
+            amount=parsed_data['amount'],
+            description=parsed_data['description'],
+            transaction_date=parsed_data.get('transaction_date'),
+            category=parsed_data.get('category')
         )
         
-        created_expense = expense_service.create_expense(expense, user_info['id'])
+        # Create expense using validated input
+        created_expense = expense_service.create_expense(expense_input)
         
-        # Format success message
+        # Use the response's built-in formatting with success message
         success_msg = (
             "✅ *Expense Recorded Successfully!*\n\n"
-            f"💰 *Amount:* ₹{created_expense.amount:,.2f}\n"
-            f"📝 *Description:* {created_expense.description}\n"
-            f"📅 *Date:* {created_expense.transaction_date}\n"
+            f"{created_expense.to_telegram_message()}"
         )
         
-        if created_expense.category:
-            success_msg += f"🏷️ *Category:* {created_expense.category}\n"
-        
-        success_msg += f"\n🆔 *ID:* `{created_expense.id}`\n"
-        
         await update.message.reply_text(success_msg, parse_mode="Markdown")
+        
+    except ValidationError as e:
+        # Handle Pydantic validation errors
+        error_messages = []
+        for error in e.errors():
+            field = error['loc'][0] if error['loc'] else 'field'
+            msg = error['msg']
+            error_messages.append(f"❌ {field}: {msg}")
+        
+        await update.message.reply_text(
+            "\n".join(error_messages) + "\n\n"
+            "Please check your input and try again.",
+            parse_mode="Markdown"
+        )
+        return EXPENSE_INPUT
         
     except Exception as e:
         await update.message.reply_text(
             f"❌ Failed to create expense: {str(e)}\n\n"
             "Please try again or contact support."
         )
+        return EXPENSE_INPUT
     
     return ConversationHandler.END
 
@@ -210,12 +174,12 @@ async def cancel_expense_conversation(update: Update, context: ContextTypes.DEFA
 
 
 def add_expense_conversation():
-    """Create conversation handler for adding expenses - single message format"""
+    """Create conversation handler for adding expenses"""
     return ConversationHandler(
         entry_points=[CommandHandler("add_expense", add_expense_start)],
         states={
-            EXPENSE_TITLE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, add_expense_title),
+            EXPENSE_INPUT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, add_expense_input),
             ],
         },
         fallbacks=[CommandHandler("cancel", cancel_expense_conversation)],
@@ -224,7 +188,7 @@ def add_expense_conversation():
 
 @admin_required
 async def delete_expense_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /delete_expense <id> command"""
+    """Handle /delete_expense <id> command using Pydantic response"""
     is_valid, args, error = parse_command_args(update.message.text, 1)
     
     if not is_valid:
@@ -237,25 +201,17 @@ async def delete_expense_command(update: Update, context: ContextTypes.DEFAULT_T
     expense_id = args[0]
     
     try:
-        # Get expense first to show what's being deleted
-        expense = expense_service.get_expense_by_id(expense_id)
+        # Delete expense and get response
+        delete_response = expense_service.delete_expense(expense_id)
         
-        if not expense:
+        if not delete_response:
             await update.message.reply_text("❌ Expense not found")
             return
         
-        # Delete the expense
-        deleted = expense_service.delete_expense(expense_id)
+        # Use the response's built-in formatting
+        message = delete_response.to_telegram_message()
         
-        if deleted:
-            await update.message.reply_text(
-                f"✅ Expense deleted successfully!\n\n"
-                f"Deleted: {expense.title}\n"
-                f"Amount: ₹{expense.amount:,.2f}",
-                parse_mode="Markdown"
-            )
-        else:
-            await update.message.reply_text("❌ Failed to delete expense")
+        await update.message.reply_text(message, parse_mode="Markdown")
             
     except Exception as e:
         await update.message.reply_text(f"Error deleting expense: {str(e)}")
