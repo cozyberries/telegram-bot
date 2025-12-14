@@ -1,5 +1,5 @@
-# Telegram Bot (using earlier version compatible with older httpx)
-python-telegram-bot==20.8
+# Telegram Bot (version compatible with httpx 0.25)
+python-telegram-bot==20.7
 
 # Supabase Client
 supabase==2.3.4
@@ -8,7 +8,7 @@ supabase==2.3.4
 pydantic==2.9.2
 pydantic-settings==2.6.1
 
-# HTTP Client (compatible with both supabase and telegram-bot 20.8)
+# HTTP Client (compatible with both)
 httpx==0.25.2
 
 # Environment Variables
