@@ -1,0 +1,55 @@
+# CozyBerries Telegram Bot - Cursor AI Rules
+
+## Python Environment
+- Always use conda environment: `cozyberries-telegram-bot`
+- Python version: 3.13
+- Location: `/opt/homebrew/Caskroom/miniconda/base/envs/cozyberries-telegram-bot`
+
+## Execution Rules
+When running ANY Python code, scripts, or commands:
+1. Activate conda environment first
+2. Use: `conda activate cozyberries-telegram-bot && <command>`
+3. Or use: `conda run -n cozyberries-telegram-bot <command>`
+
+## Code Style (from user rules)
+- Use functional, declarative programming
+- Prefer iteration over code duplication
+- Use descriptive variable names with auxiliary verbs
+- Use lowercase with underscores for files/directories
+- Use type hints for all function signatures
+- Prefer Pydantic models over raw dictionaries
+- Handle errors at the beginning of functions (early returns)
+- Use async def for I/O-bound operations
+
+## Project Structure
+- FastAPI for local development (app/main.py)
+- Vercel serverless handlers for production (api/*.py)
+- Supabase for database
+- Logfire for observability
+- Telegram Bot API for bot functionality
+
+## Testing
+- Local: Use FastAPI with full Swagger docs
+- Production: Vercel serverless functions
+- Always test in conda environment
+
+## Key Commands
+```bash
+# Activate environment
+conda activate cozyberries-telegram-bot
+
+# Run local server
+conda activate cozyberries-telegram-bot && uvicorn app.main:app --reload
+
+# Run tests
+conda activate cozyberries-telegram-bot && ./TEST_LOGFIRE_LOCAL.sh
+
+# Install package
+conda activate cozyberries-telegram-bot && pip install package-name
+```
+
+## Important
+- Never use system Python
+- Always verify conda environment before executing
+- Update requirements.txt when installing packages
+- Use .env.local for local environment variables
