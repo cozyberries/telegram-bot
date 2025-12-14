@@ -1,1 +1,1 @@
-"""Test package for CozyBerries Telegram Bot"""
+"""Telegram webhook tests"""
