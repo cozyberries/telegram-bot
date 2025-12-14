@@ -16,7 +16,8 @@ EXPENSE_TITLE, EXPENSE_AMOUNT, EXPENSE_CATEGORY, EXPENSE_DATE, EXPENSE_VENDOR = 
 async def list_expenses_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /expenses command - list expenses"""
     try:
-        expenses = await expense_service.get_expenses(limit=10)
+        # Call synchronous function
+        expenses = expense_service.get_expenses(limit=10)
         
         if not expenses:
             await update.message.reply_text("No expenses found.")
@@ -64,7 +65,8 @@ async def get_expense_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     expense_id = args[0]
     
     try:
-        expense = await expense_service.get_expense_by_id(expense_id)
+        # Call synchronous function
+        expense = expense_service.get_expense_by_id(expense_id)
         
         if not expense:
             await update.message.reply_text("❌ Expense not found")
@@ -107,7 +109,8 @@ async def approve_expense_command(update: Update, context: ContextTypes.DEFAULT_
     user_info = get_user_info(update)
     
     try:
-        expense = await expense_service.approve_expense(expense_id, str(user_info["id"]))
+        # Call synchronous function
+        expense = expense_service.approve_expense(expense_id, str(user_info["id"]))
         
         if not expense:
             await update.message.reply_text("❌ Expense not found")
@@ -137,7 +140,8 @@ async def reject_expense_command(update: Update, context: ContextTypes.DEFAULT_T
     expense_id, reason = args
     
     try:
-        expense = await expense_service.reject_expense(expense_id, reason)
+        # Call synchronous function
+        expense = expense_service.reject_expense(expense_id, reason)
         
         if not expense:
             await update.message.reply_text("❌ Expense not found")
@@ -273,7 +277,8 @@ async def add_expense_vendor(update: Update, context: ContextTypes.DEFAULT_TYPE)
             payment_method="company_card",
         )
         
-        expense = await expense_service.create_expense(expense_data, str(user_info["id"]))
+        # Call synchronous function
+        expense = expense_service.create_expense(expense_data, str(user_info["id"]))
         
         await update.message.reply_text(
             f"✅ *Expense created successfully!*\n\n"
@@ -323,7 +328,8 @@ async def handle_expense_callback(update: Update, context: ContextTypes.DEFAULT_
         user_info = get_user_info(update)
         
         try:
-            expense = await expense_service.approve_expense(expense_id, str(user_info["id"]))
+            # Call synchronous function
+            expense = expense_service.approve_expense(expense_id, str(user_info["id"]))
             if expense:
                 await query.edit_message_text(
                     f"✅ Expense approved!\n\n{format_expense_summary(expense)}",
@@ -345,10 +351,11 @@ async def handle_expense_callback(update: Update, context: ContextTypes.DEFAULT_
         status_filter = data.replace("expense_filter_", "")
         
         try:
+            # Call synchronous function
             if status_filter == "all":
-                expenses = await expense_service.get_expenses(limit=10)
+                expenses = expense_service.get_expenses(limit=10)
             else:
-                expenses = await expense_service.get_expenses(status=status_filter)
+                expenses = expense_service.get_expenses(status=status_filter)
             
             if not expenses:
                 await query.edit_message_text(f"No expenses found with status: {status_filter}")

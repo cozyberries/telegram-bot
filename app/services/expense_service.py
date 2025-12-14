@@ -6,7 +6,7 @@ from app.database.supabase_client import supabase
 from app.database.models import Expense, ExpenseCreate, ExpenseUpdate, ExpenseStatus
 
 
-async def get_expenses(
+def get_expenses(
     limit: int = 50,
     offset: int = 0,
     status: Optional[ExpenseStatus] = None
@@ -26,7 +26,7 @@ async def get_expenses(
     return [Expense(**item) for item in response.data]
 
 
-async def get_expense_by_id(expense_id: str) -> Optional[Expense]:
+def get_expense_by_id(expense_id: str) -> Optional[Expense]:
     """Get expense by ID"""
     response = supabase.table("expenses")\
         .select("*, category_data:expense_categories(*)")\
@@ -38,7 +38,7 @@ async def get_expense_by_id(expense_id: str) -> Optional[Expense]:
     return None
 
 
-async def create_expense(expense_data: ExpenseCreate, user_id: str) -> Expense:
+def create_expense(expense_data: ExpenseCreate, user_id: str) -> Expense:
     """Create a new expense"""
     data = expense_data.model_dump()
     data["user_id"] = user_id
@@ -51,7 +51,7 @@ async def create_expense(expense_data: ExpenseCreate, user_id: str) -> Expense:
     return Expense(**response.data[0])
 
 
-async def update_expense(expense_id: str, expense_data: ExpenseUpdate) -> Optional[Expense]:
+def update_expense(expense_id: str, expense_data: ExpenseUpdate) -> Optional[Expense]:
     """Update an existing expense"""
     update_data = {}
     for field, value in expense_data.model_dump(exclude_unset=True).items():
@@ -59,7 +59,7 @@ async def update_expense(expense_id: str, expense_data: ExpenseUpdate) -> Option
             update_data[field] = value
     
     if not update_data:
-        return await get_expense_by_id(expense_id)
+        return get_expense_by_id(expense_id)
     
     response = supabase.table("expenses")\
         .update(update_data)\
@@ -71,7 +71,7 @@ async def update_expense(expense_id: str, expense_data: ExpenseUpdate) -> Option
     return None
 
 
-async def approve_expense(expense_id: str, approver_id: str) -> Optional[Expense]:
+def approve_expense(expense_id: str, approver_id: str) -> Optional[Expense]:
     """Approve an expense"""
     update_data = {
         "status": "approved",
@@ -89,7 +89,7 @@ async def approve_expense(expense_id: str, approver_id: str) -> Optional[Expense
     return None
 
 
-async def reject_expense(expense_id: str, reason: str) -> Optional[Expense]:
+def reject_expense(expense_id: str, reason: str) -> Optional[Expense]:
     """Reject an expense"""
     update_data = {
         "status": "rejected",
@@ -106,12 +106,12 @@ async def reject_expense(expense_id: str, reason: str) -> Optional[Expense]:
     return None
 
 
-async def get_pending_expenses() -> List[Expense]:
+def get_pending_expenses() -> List[Expense]:
     """Get all pending expenses"""
-    return await get_expenses(status="pending")
+    return get_expenses(status="pending")
 
 
-async def get_expense_count(status: Optional[ExpenseStatus] = None) -> int:
+def get_expense_count(status: Optional[ExpenseStatus] = None) -> int:
     """Get total number of expenses"""
     query = supabase.table("expenses").select("id", count="exact")
     
@@ -122,7 +122,7 @@ async def get_expense_count(status: Optional[ExpenseStatus] = None) -> int:
     return response.count or 0
 
 
-async def get_total_expense_amount(status: Optional[ExpenseStatus] = None) -> float:
+def get_total_expense_amount(status: Optional[ExpenseStatus] = None) -> float:
     """Calculate total expense amount"""
     query = supabase.table("expenses").select("amount")
     

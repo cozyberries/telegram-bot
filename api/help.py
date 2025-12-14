@@ -11,13 +11,11 @@ class handler(BaseHTTPRequestHandler):
         """Return bot commands and help"""
         try:
             help_data = {
-                "bot": "CozyBerries Admin Bot",
-                "description": "Telegram bot for managing CozyBerries admin operations",
+                "bot": "CozyBerries Assistant",
+                "description": "Telegram bot for managing CozyBerries operations",
                 "commands": {
                     "general": {
-                        "/start": "Start the bot and get welcome message",
-                        "/help": "Show this help message",
-                        "/menu": "Show main menu with all available options"
+                        "/start": "Show all available commands and welcome message"
                     },
                     "products": {
                         "/products": "List all products",

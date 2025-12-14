@@ -170,7 +170,7 @@ class handler(BaseHTTPRequestHandler):
             
             response = {
                 "status": "ok",
-                "bot": "CozyBerries Admin Bot",
+                "bot": "CozyBerries Assistant",
                 "webhook": "active",
                 "logfire": logfire_status,
                 "env": {

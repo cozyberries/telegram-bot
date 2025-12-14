@@ -68,9 +68,8 @@ class TelegramBot:
         try:
             from app.bot.handlers import start, products, orders, expenses, stock, analytics
             
-            # Start and help command
+            # Start command (merged with help)
             self.application.add_handler(CommandHandler("start", start.start_command))
-            self.application.add_handler(CommandHandler("help", start.help_command))
             
             # Product handlers
             self.application.add_handler(CommandHandler("products", products.list_products_command))
@@ -153,8 +152,7 @@ class TelegramBot:
     async def set_bot_commands(self):
         """Set bot commands for Telegram UI"""
         commands = [
-            BotCommand("start", "Start the bot and see welcome message"),
-            BotCommand("help", "Show available commands"),
+            BotCommand("start", "Show all available commands"),
             BotCommand("products", "List all products"),
             BotCommand("product", "Get product details"),
             BotCommand("add_product", "Add a new product"),

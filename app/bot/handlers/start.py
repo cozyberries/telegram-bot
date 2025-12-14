@@ -1,4 +1,4 @@
-"""Start and help command handlers"""
+"""Start command handler"""
 
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -7,27 +7,12 @@ from app.bot.middleware.auth import admin_required
 
 @admin_required
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /start command"""
+    """Handle /start command - shows all available commands"""
     user = update.effective_user
-    welcome_message = (
-        f"👋 Welcome to *CozyBerries Admin Bot*, {user.first_name}!\n\n"
-        "I'm here to help you manage your e-commerce operations:\n\n"
-        "📦 *Orders* - View and update order status\n"
-        "🛍️ *Products* - Manage product catalog\n"
-        "💰 *Expenses* - Track and approve expenses\n"
-        "📊 *Analytics* - View business statistics\n"
-        "📦 *Stock* - Monitor inventory levels\n\n"
-        "Use /help to see all available commands."
-    )
     
-    await update.message.reply_text(welcome_message, parse_mode="Markdown")
-
-
-@admin_required
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /help command"""
     help_text = (
-        "🤖 *CozyBerries Admin Bot - Command Reference*\n\n"
+        f"👋 Welcome *{user.first_name}* to *CozyBerries Assistant*!\n\n"
+        "I'll help you manage your e-commerce operations. Here are all available commands:\n\n"
         
         "*📦 Orders*\n"
         "/orders - List recent orders\n"
@@ -62,8 +47,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/stats\\_products - Product statistics\n\n"
         
         "*ℹ️ General*\n"
-        "/start - Welcome message\n"
-        "/help - This help message\n"
+        "/start - Show this help message\n"
     )
     
     await update.message.reply_text(help_text, parse_mode="Markdown")
