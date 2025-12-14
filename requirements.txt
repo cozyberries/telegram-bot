@@ -20,3 +20,6 @@ python-dateutil==2.9.0
 # FastAPI and ASGI server
 fastapi==0.115.5
 uvicorn[standard]==0.34.0
+
+# Observability and Logging
+logfire==0.54.0
