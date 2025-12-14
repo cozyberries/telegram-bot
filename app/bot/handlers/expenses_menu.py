@@ -21,19 +21,30 @@ async def handle_expenses_menu(update: Update, context: ContextTypes.DEFAULT_TYP
         pass  # Ignore if already answered
     
     if data == "expenses_list_all":
-        from app.bot.handlers import expenses
-        # Redirect to list expenses
+        from app.bot.handlers.expenses import show_expense_page
+        from app.services import expense_service
+        
         try:
-            await expenses.list_expenses_command(update, context)
+            # Show expense browser starting at offset 0
+            await show_expense_page(update, context, offset=0)
         except Exception as e:
-            logger.error(f"Failed to list expenses: {e}")
+            logger.error(f"Failed to list expenses: {e}", exc_info=True)
+            text = f"❌ Error loading expenses: {str(e)}"
+            keyboard = [[InlineKeyboardButton("« Back to Expenses", callback_data="menu_expenses")]]
+            try:
+                await query.edit_message_text(
+                    text,
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+            except Exception:
+                pass
     
     elif data == "expenses_create":
         from app.bot.handlers import expenses
         # Start the add expense conversation
         text = (
             "➕ *Add New Expense*\n\n"
-            "Please use the /add_expense command to start adding a new expense.\n\n"
+            "Please use the `/add_expense` command to start adding a new expense\\.\n\n"
             "Or tap the button below:"
         )
         keyboard = [
@@ -43,19 +54,40 @@ async def handle_expenses_menu(update: Update, context: ContextTypes.DEFAULT_TYP
         try:
             await query.edit_message_text(
                 text,
-                parse_mode="Markdown",
+                parse_mode="MarkdownV2",
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
         except Exception as e:
             logger.error(f"Failed to edit message: {e}")
+            # Fallback to plain text
+            text_plain = "➕ Add New Expense\n\nPlease use the /add_expense command to start adding a new expense.\n\nOr tap the button below:"
+            try:
+                await query.edit_message_text(
+                    text_plain,
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+            except Exception:
+                pass
     
     elif data == "start_add_expense":
         from app.bot.handlers import expenses
         # Trigger add_expense_start
         try:
-            await expenses.add_expense_start(update, context)
+            # Send a new message instead of editing (conversation requires message)
+            await query.message.reply_text(
+                "➕ *Add New Expense*\n\nPlease enter the amount:",
+                parse_mode="Markdown"
+            )
+            # Set conversation state
+            return await expenses.add_expense_start(update, context)
         except Exception as e:
-            logger.error(f"Failed to start add expense: {e}")
+            logger.error(f"Failed to start add expense: {e}", exc_info=True)
+            try:
+                await query.message.reply_text(
+                    "❌ Error starting expense creation. Please use /add_expense command instead."
+                )
+            except Exception:
+                pass
     
     elif data == "expenses_stats":
         from app.services import expense_service
@@ -70,8 +102,13 @@ async def handle_expenses_menu(update: Update, context: ContextTypes.DEFAULT_TYP
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
         except Exception as e:
-            logger.error(f"Failed to show stats: {e}")
+            logger.error(f"Failed to show stats: {e}", exc_info=True)
+            text = f"❌ Error loading statistics: {str(e)}"
+            keyboard = [[InlineKeyboardButton("« Back to Expenses", callback_data="menu_expenses")]]
             try:
-                await query.answer(f"Error: {str(e)}", show_alert=True)
+                await query.edit_message_text(
+                    text,
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
             except Exception:
                 pass
