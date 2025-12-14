@@ -8,6 +8,11 @@
   ],
   "routes": [
     {
+      "src": "/",
+      "status": 301,
+      "headers": { "Location": "/health" }
+    },
+    {
       "src": "/webhook",
       "dest": "/api/webhook.py"
     },
@@ -22,10 +27,6 @@
     {
       "src": "/docs",
       "dest": "/api/docs.py"
-    },
-    {
-      "src": "/",
-      "dest": "/api/health.py"
     }
   ],
   "env": {
