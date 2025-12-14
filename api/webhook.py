@@ -90,15 +90,32 @@ class handler(BaseHTTPRequestHandler):
             # Import here to avoid issues with module loading
             from app.bot.bot import bot
             
-            # Extract update info for Logfire
+            # Extract update info for Logfire and logging
             update_id = update_data.get('update_id')
             user_id = None
+            username = None
             command = None
+            message_type = None
             
             if 'message' in update_data:
                 msg = update_data['message']
                 user_id = msg.get('from', {}).get('id')
-                command = msg.get('text', '').split()[0] if msg.get('text') else None
+                username = msg.get('from', {}).get('username', 'unknown')
+                text = msg.get('text', '')
+                command = text.split()[0] if text else None
+                message_type = 'command' if command and command.startswith('/') else 'message'
+            elif 'callback_query' in update_data:
+                callback = update_data['callback_query']
+                user_id = callback.get('from', {}).get('id')
+                username = callback.get('from', {}).get('username', 'unknown')
+                command = callback.get('data', 'callback')
+                message_type = 'callback'
+            
+            # Log command execution
+            if command:
+                logger.warning(f"📨 Webhook [{message_type}]: {command} from @{username} (user_id: {user_id}, update: {update_id})")
+            else:
+                logger.warning(f"📨 Webhook [unknown]: update {update_id} from user {user_id}")
             
             # Start Logfire span (silent)
             try:

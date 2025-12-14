@@ -155,23 +155,13 @@ async def root():
     response_description="Health status information"
 )
 async def health_check():
-    """Health check endpoint"""
-    try:
-        from app.logging_config import log_api_request, log_metric, is_logfire_enabled
-        if is_logfire_enabled():
-            with log_api_request("/health", "GET"):
-                log_metric("health_check", 1)
-                logger.info("🔥 Health check - logged to Logfire")
-    except:
-        pass
-    
+    """Health check endpoint - silent (no logging to reduce noise)"""
     bot_initialized = False
     try:
         bot_initialized = bot._initialized
     except:
         pass
     
-    logger.info("Health check endpoint accessed")
     return {
         "status": "ok",
         "service": "CozyBerries Telegram Bot",
@@ -250,8 +240,32 @@ async def telegram_webhook(request: Request):
         # Parse update data
         update_data = await request.json()
         update_id = update_data.get('update_id', 'unknown')
-        user_id = update_data.get('message', {}).get('from', {}).get('id') if 'message' in update_data else None
-        command = update_data.get('message', {}).get('text', '').split()[0] if 'message' in update_data and update_data['message'].get('text') else None
+        
+        # Extract detailed info about the update
+        user_id = None
+        username = None
+        command = None
+        message_type = None
+        
+        if 'message' in update_data:
+            msg = update_data['message']
+            user_id = msg.get('from', {}).get('id')
+            username = msg.get('from', {}).get('username', 'unknown')
+            text = msg.get('text', '')
+            command = text.split()[0] if text else None
+            message_type = 'command' if command and command.startswith('/') else 'message'
+        elif 'callback_query' in update_data:
+            callback = update_data['callback_query']
+            user_id = callback.get('from', {}).get('id')
+            username = callback.get('from', {}).get('username', 'unknown')
+            command = callback.get('data', 'callback')
+            message_type = 'callback'
+        
+        # Log command execution clearly
+        if command:
+            logger.info(f"📨 Webhook [{message_type}]: {command} from @{username} (user_id: {user_id}, update: {update_id})")
+        else:
+            logger.info(f"📨 Webhook [unknown]: update {update_id} from user {user_id}")
         
         # Start Logfire span
         try:
@@ -260,11 +274,8 @@ async def telegram_webhook(request: Request):
                 span = log_bot_update(update_id, user_id, command)
                 if span:
                     span.__enter__()
-                    logger.info(f"🔥 Telegram update {update_id} - logged to Logfire")
         except Exception as e:
             logger.warning(f"Could not log to Logfire: {e}")
-        
-        logger.info(f"Received Telegram update: {update_id}")
         
         # Initialize bot if needed
         if not bot._initialized:
