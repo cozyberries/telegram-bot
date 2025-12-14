@@ -6,15 +6,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 import logging
 from typing import Dict, Any
+import os
 
-from app.config import settings
-from app.bot.bot import bot
-from app.services.notification_service import send_order_notification
-from app.database.models import Order
-
-# Configure logging
+# Configure logging early
 logging.basicConfig(
-    level=getattr(logging, settings.log_level.upper()),
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
@@ -66,15 +62,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Import after app creation to avoid circular imports
+from app.config import settings
+from app.bot.bot import bot
+from app.services.notification_service import send_order_notification
+from app.database.models import Order
+
 
 @app.on_event("startup")
 async def startup_event():
     """Initialize bot on startup"""
     try:
         logger.info("Starting CozyBerries Telegram Bot...")
-        if not bot._initialized:
-            await bot.initialize()
-        logger.info("Bot initialized successfully")
+        # Only initialize if environment variables are set
+        if os.getenv("TELEGRAM_BOT_TOKEN"):
+            if not bot._initialized:
+                await bot.initialize()
+            logger.info("Bot initialized successfully")
+        else:
+            logger.warning("TELEGRAM_BOT_TOKEN not set - bot not initialized")
     except Exception as e:
         logger.error(f"Failed to initialize bot: {e}", exc_info=True)
 
@@ -84,7 +90,8 @@ async def shutdown_event():
     """Cleanup on shutdown"""
     logger.info("Shutting down CozyBerries Telegram Bot...")
     try:
-        await bot.stop()
+        if bot._initialized:
+            await bot.stop()
     except Exception as e:
         logger.error(f"Error during shutdown: {e}")
 
@@ -114,12 +121,19 @@ async def root():
 )
 async def health_check():
     """Health check endpoint"""
+    bot_initialized = False
+    try:
+        bot_initialized = bot._initialized
+    except:
+        pass
+    
     return {
         "status": "ok",
         "service": "CozyBerries Telegram Bot",
         "timestamp": datetime.now().isoformat(),
         "version": "1.0.0",
-        "bot_initialized": bot._initialized
+        "bot_initialized": bot_initialized,
+        "env_configured": bool(os.getenv("TELEGRAM_BOT_TOKEN"))
     }
 
 
@@ -131,12 +145,18 @@ async def health_check():
 )
 async def bot_info():
     """Get bot information"""
+    admin_users_count = 0
+    try:
+        admin_users_count = len(settings.admin_user_ids)
+    except:
+        pass
+    
     return {
         "status": "active",
         "bot_name": "CozyBerries Admin Bot",
         "webhook": "configured",
-        "initialized": bot._initialized,
-        "admin_users_count": len(settings.admin_user_ids),
+        "initialized": bot._initialized if hasattr(bot, '_initialized') else False,
+        "admin_users_count": admin_users_count,
         "features": [
             "Products Management",
             "Orders Management",
@@ -163,6 +183,13 @@ async def telegram_webhook(request: Request):
     Updates include messages, commands, callback queries, etc.
     """
     try:
+        # Check if bot is configured
+        if not os.getenv("TELEGRAM_BOT_TOKEN"):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Bot not configured - environment variables missing"
+            )
+        
         # Parse update data
         update_data = await request.json()
         update_id = update_data.get('update_id', 'unknown')
@@ -178,6 +205,8 @@ async def telegram_webhook(request: Request):
         
         return {"ok": True, "update_id": update_id}
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error processing webhook: {e}", exc_info=True)
         raise HTTPException(
@@ -198,7 +227,8 @@ async def webhook_info():
         "status": "active",
         "endpoint": "/webhook",
         "bot": "CozyBerries Admin Bot",
-        "description": "Telegram webhook for receiving bot updates"
+        "description": "Telegram webhook for receiving bot updates",
+        "configured": bool(os.getenv("TELEGRAM_BOT_TOKEN"))
     }
 
 
@@ -222,6 +252,13 @@ async def notify_order(request: Request):
     - Direct order object
     """
     try:
+        # Check if bot is configured
+        if not os.getenv("TELEGRAM_BOT_TOKEN"):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Bot not configured - environment variables missing"
+            )
+        
         # Parse request data
         data = await request.json()
         
@@ -280,7 +317,8 @@ async def notify_order_info():
         "expected_payload": {
             "record": "Order data object",
             "or": "Direct order object"
-        }
+        },
+        "configured": bool(os.getenv("TELEGRAM_BOT_TOKEN"))
     }
 
 
@@ -293,7 +331,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={
             "ok": False,
             "error": "Internal server error",
-            "detail": str(exc) if settings.log_level.upper() == "DEBUG" else "An error occurred"
+            "detail": str(exc)
         }
     )
 
