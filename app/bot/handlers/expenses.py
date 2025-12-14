@@ -177,11 +177,19 @@ async def add_expense_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = get_expense_summary_text({})
     reply_markup = get_expense_keyboard({})
     
-    await update.message.reply_text(
-        text,
-        reply_markup=reply_markup,
-        parse_mode="Markdown"
-    )
+    # Handle both message and callback query
+    if update.callback_query:
+        await update.callback_query.message.reply_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+    else:
+        await update.message.reply_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
     
     return EXPENSE_MENU
 
