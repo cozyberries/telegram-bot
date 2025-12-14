@@ -45,16 +45,13 @@ def configure_logfire() -> bool:
         
         project_name = os.getenv("LOGFIRE_PROJECT_NAME", "cozyberries-telegram-bot")
         
-        # Configure Logfire with minimal settings for serverless
+        # Configure Logfire with minimal settings for serverless (SILENT)
         logfire.configure(
             token=logfire_token,
             service_name=project_name,
             send_to_logfire=True,
             console=False,  # Don't log to console
         )
-        
-        # Test that it works (silent)
-        logfire.info("logfire_initialized", message="Logfire configured")
         
         _logfire_configured = True
         

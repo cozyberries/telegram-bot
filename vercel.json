@@ -25,6 +25,10 @@
       "dest": "/api/health.py"
     },
     {
+      "src": "/help",
+      "dest": "/api/help.py"
+    },
+    {
       "src": "/docs",
       "dest": "/api/docs.py"
     }
