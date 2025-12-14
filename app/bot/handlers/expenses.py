@@ -156,9 +156,34 @@ def get_expense_keyboard(draft: dict) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 
-# ... (summary text function remains same)
+def get_expense_summary_text(draft: dict) -> str:
+    """Generate summary text for the draft expense"""
+    return (
+        "📝 *New Expense Draft*\n\n"
+        f"💰 *Amount:* {draft.get('amount') or '_Not set_'}\n"
+        f"📄 *Description:* {draft.get('description') or '_Not set_'}\n"
+        f"🗓 *Date:* {draft.get('transaction_date') or 'Today'}\n"
+        f"📂 *Category:* {draft.get('category') or 'None'}\n\n"
+        "_Use the buttons below to update fields_"
+    )
 
-# ... (add_expense_start remains same)
+
+@admin_required
+async def add_expense_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Start the add expense conversation with interactive form"""
+    # Initialize draft expense
+    context.user_data['draft_expense'] = {}
+    
+    text = get_expense_summary_text({})
+    reply_markup = get_expense_keyboard({})
+    
+    await update.message.reply_text(
+        text,
+        reply_markup=reply_markup,
+        parse_mode="Markdown"
+    )
+    
+    return EXPENSE_MENU
 
 
 async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):

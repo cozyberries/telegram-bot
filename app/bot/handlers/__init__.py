@@ -6,6 +6,7 @@ from app.bot.handlers import orders
 from app.bot.handlers import expenses
 from app.bot.handlers import stock
 from app.bot.handlers import analytics
+from app.bot.handlers import menu
 
 __all__ = [
     'start',
@@ -14,4 +15,5 @@ __all__ = [
     'expenses',
     'stock',
     'analytics',
+    'menu',
 ]

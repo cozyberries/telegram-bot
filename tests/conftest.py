@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from dotenv import load_dotenv
+from telegram.ext import Application
 
 # Add app directory to Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -23,10 +24,15 @@ else:
 os.environ['TESTING'] = 'true'
 
 # Use environment variables from .env.test
-os.environ.setdefault('TELEGRAM_BOT_TOKEN', os.getenv('TELEGRAM_BOT_TOKEN', 'test_bot_token'))
+os.environ.setdefault('TELEGRAM_BOT_TOKEN', os.getenv('TELEGRAM_BOT_TOKEN', '123456789:TEST_TOKEN'))
 os.environ.setdefault('SUPABASE_URL', os.getenv('SUPABASE_URL', 'https://test.supabase.co'))
 os.environ.setdefault('SUPABASE_SERVICE_ROLE_KEY', os.getenv('SUPABASE_KEY', os.getenv('SUPABASE_SERVICE_ROLE_KEY', 'test_key')))
-os.environ.setdefault('ADMIN_USER_IDS', os.getenv('ADMIN_USER_IDS', '123456789'))
+
+# Ensure test admin ID is allowed (append to existing or set new)
+existing_admins = os.getenv('ADMIN_TELEGRAM_USER_IDS', '')
+test_admin_id = '123456789'
+if test_admin_id not in existing_admins:
+    os.environ['ADMIN_TELEGRAM_USER_IDS'] = f"{existing_admins},{test_admin_id}" if existing_admins else test_admin_id
 
 # Import app after environment is set
 from app.main import app
@@ -40,14 +46,23 @@ def test_client() -> Generator[TestClient, None, None]:
 
 
 @pytest.fixture(scope="function")
-def valid_user_id() -> str:
+def valid_user_id() -> int:
     """Return a valid user ID for testing"""
-    # Use the actual test user from database: test@cozyberries.in
-    return 'aa79eb28-baf3-4cba-9388-5d8c7d598ad9'
+    return 123456789
 
 
 @pytest.fixture(scope="function")
-def valid_admin_id() -> str:
+def valid_admin_id() -> int:
     """Return a valid admin user ID for testing"""
-    # Use the same test user as admin
-    return 'aa79eb28-baf3-4cba-9388-5d8c7d598ad9'
+    return 123456789
+
+
+@pytest.fixture(autouse=True)
+def mock_telegram_request(mocker):
+    """Mock Telegram API requests to prevent real network calls"""
+    async def mock_do_request(*args, **kwargs):
+        # Return a successful dummy response
+        return 200, b'{"ok": true, "result": {"message_id": 123, "date": 1234567890, "chat": {"id": 123456789, "type": "private"}}}'
+
+    # Patch the HTTPXRequest.do_request method in python-telegram-bot
+    mocker.patch('telegram.request._httpxrequest.HTTPXRequest.do_request', side_effect=mock_do_request)

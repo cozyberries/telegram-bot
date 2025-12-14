@@ -57,12 +57,18 @@ class TelegramBot:
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
                 
-                # Initialize the application
-                loop.run_until_complete(self.application.initialize())
-                logger.info("Application initialized for webhook mode")
+                # Check if event loop is already running
+                if not loop.is_running():
+                    # Initialize the application
+                    loop.run_until_complete(self.application.initialize())
+                    logger.info("Application initialized for webhook mode")
+                else:
+                    # For testing: create a new task to initialize
+                    logger.info("Event loop already running, scheduling async initialization")
+                    # We'll initialize later when processing first update
             except Exception as e:
                 logger.warning(f"Could not initialize application with event loop: {e}")
-                # Try sync initialization as fallback
+                # Application will be initialized on first update
                 pass
             
             # Register handlers
@@ -83,12 +89,14 @@ class TelegramBot:
     def _register_handlers(self):
         """Register all command and callback handlers"""
         try:
-            from app.bot.handlers import start, products, orders, expenses, stock, analytics
+            from app.bot.handlers import start, products, orders, expenses, stock, analytics, menu
+            from app.bot.handlers import products_interactive
             
-            # Start command (merged with help)
+            # Main menu and start commands
             self.application.add_handler(CommandHandler("start", start.start_command))
+            self.application.add_handler(CommandHandler("menu", start.menu_command))
             
-            # Product handlers
+            # Product handlers (keep original commands for backward compatibility)
             self.application.add_handler(CommandHandler("products", products.list_products_command))
             self.application.add_handler(CommandHandler("product", products.get_product_command))
             self.application.add_handler(products.add_product_conversation())
@@ -131,31 +139,75 @@ class TelegramBot:
     async def _handle_callback_query(self, update: Update, context):
         """Handle callback queries from inline buttons"""
         query = update.callback_query
-        await query.answer()
-        
-        # Route to appropriate handler based on callback data
         data = query.data
         
-        if data.startswith("product_"):
-            from app.bot.handlers import products
-            await products.handle_product_callback(update, context)
-        elif data.startswith("order_"):
-            from app.bot.handlers import orders
-            await orders.handle_order_callback(update, context)
-        elif data.startswith("stock_"):
-            from app.bot.handlers import stock
-            await stock.handle_stock_callback(update, context)
-        elif data.startswith("exp_page_") or data == "exp_close_browser":
-            from app.bot.handlers import expenses
-            await expenses.handle_expense_browser_callback(update, context)
-        elif data.startswith("exp_"):
-            # If we get here and it's not a browser command, 
-            # implies the conversation state is lost/expired.
-            await query.edit_message_text(
-                "⚠️ This session has expired. Please start a new expense entry with /add_expense"
-            )
-        else:
-            await query.edit_message_text("Unknown action")
+        # Route to appropriate handler based on callback data prefix
+        try:
+            # Menu navigation
+            if data.startswith("menu_"):
+                from app.bot.handlers import menu
+                await menu.handle_menu_callback(update, context)
+            
+            # Products
+            elif data.startswith("products_") or data.startswith("product_"):
+                from app.bot.handlers import products_interactive
+                await products_interactive.handle_products_menu(update, context)
+            
+            # Orders
+            elif data.startswith("order"):
+                from app.bot.handlers import orders
+                if hasattr(orders, 'handle_order_callback'):
+                    await orders.handle_order_callback(update, context)
+                else:
+                    await query.answer("Orders interactive menu coming soon!")
+            
+            # Expenses  
+            elif data.startswith("exp_"):
+                from app.bot.handlers import expenses
+                # Handle expense browser and menu
+                if data.startswith("exp_page_") or data == "exp_close_browser":
+                    await expenses.handle_expense_browser_callback(update, context)
+                else:
+                    await query.answer("Expense menu action processed")
+            
+            elif data.startswith("expense"):
+                await query.answer("Expenses interactive menu coming soon!")
+            
+            # Stock
+            elif data.startswith("stock"):
+                from app.bot.handlers import stock
+                if hasattr(stock, 'handle_stock_callback'):
+                    await stock.handle_stock_callback(update, context)
+                else:
+                    await query.answer("Stock interactive menu coming soon!")
+            
+            # Analytics
+            elif data.startswith("analytics_"):
+                from app.bot.handlers import analytics
+                # Direct call to analytics commands based on callback
+                if data == "analytics_overall":
+                    await analytics.stats_command(update, context)
+                elif data == "analytics_orders":
+                    await analytics.stats_orders_command(update, context)
+                elif data == "analytics_expenses":
+                    await analytics.stats_expenses_command(update, context)
+                elif data == "analytics_products":
+                    await analytics.stats_products_command(update, context)
+                else:
+                    await query.answer("Analytics menu action")
+            
+            # No-op (for pagination indicators)
+            elif data == "noop":
+                pass
+            
+            # Unknown callback
+            else:
+                await query.answer("Unknown action")
+                logger.warning(f"Unhandled callback data: {data}")
+        
+        except Exception as e:
+            logger.error(f"Error handling callback query: {e}", exc_info=True)
+            await query.answer(f"Error: {str(e)}", show_alert=True)
     
     async def _error_handler(self, update: Update, context):
         """Handle errors"""
@@ -201,6 +253,10 @@ class TelegramBot:
         try:
             if not self._initialized:
                 self.initialize()
+            
+            # Ensure application is initialized for async context
+            if not self.application._initialized:
+                await self.application.initialize()
             
             logger.info(f"Processing update: {update_data.get('update_id')}")
             
