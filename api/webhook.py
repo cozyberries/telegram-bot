@@ -132,6 +132,12 @@ class handler(BaseHTTPRequestHandler):
                 await asyncio.to_thread(bot.initialize)
                 logger.info("Bot initialized")
             
+            # CRITICAL: Initialize the Application for python-telegram-bot 21.9+
+            if not bot.application._initialized:
+                logger.info("Initializing Application...")
+                await bot.application.initialize()
+                logger.info("Application initialized")
+            
             # Create Update object from JSON data
             update = Update.de_json(update_data, bot.application.bot)
             
