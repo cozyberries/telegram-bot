@@ -48,6 +48,23 @@ class TelegramBot:
                 .build()
             )
             
+            # Initialize the application for webhook mode
+            # This is required for processing updates without polling
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_closed():
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                
+                # Initialize the application
+                loop.run_until_complete(self.application.initialize())
+                logger.info("Application initialized for webhook mode")
+            except Exception as e:
+                logger.warning(f"Could not initialize application with event loop: {e}")
+                # Try sync initialization as fallback
+                pass
+            
             # Register handlers
             self._register_handlers()
             
@@ -194,6 +211,17 @@ class TelegramBot:
         except Exception as e:
             logger.error(f"Error processing update: {e}", exc_info=True)
             raise
+    
+    def stop(self):
+        """Stop the bot and cleanup resources"""
+        try:
+            if self._initialized and self.application:
+                logger.info("Stopping bot application...")
+                # Don't call shutdown in Lambda - let the container handle it
+                self._initialized = False
+                logger.info("Bot stopped")
+        except Exception as e:
+            logger.error(f"Error stopping bot: {e}")
 
 
 # Global bot instance

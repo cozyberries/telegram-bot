@@ -157,161 +157,163 @@ async def reject_expense_command(update: Update, context: ContextTypes.DEFAULT_T
         await update.message.reply_text(f"Error rejecting expense: {str(e)}")
 
 
-# Conversation handlers for adding expense
+# Single-message expense creation
 @admin_required
 async def add_expense_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Start add expense conversation"""
-    await update.message.reply_text(
+    """Start add expense - single message format"""
+    help_text = (
         "💰 *Add New Expense*\n\n"
-        "Please enter the expense title:\n\n"
-        "Send /cancel to stop.",
-        parse_mode="Markdown"
+        "Please send all details in one message using this format:\n\n"
+        "```\n"
+        "Amount: 1500\n"
+        "Detail: Office supplies purchase\n"
+        "Date: 2025-12-14\n"
+        "Notes: Pens, paper, and notebooks\n"
+        "```\n\n"
+        "📋 *Format Guide:*\n"
+        "• `Amount:` Required - expense amount (₹)\n"
+        "• `Detail:` Required - what was purchased\n"
+        "• `Date:` Optional - transaction date (YYYY-MM-DD)\n"
+        "• `Notes:` Optional - additional information\n\n"
+        "💡 *Example:*\n"
+        "```\n"
+        "Amount: 2500\n"
+        "Detail: Client lunch meeting\n"
+        "Date: 2025-12-14\n"
+        "Notes: 3 people at Taj restaurant\n"
+        "```\n\n"
+        "Send your expense details now, or /cancel to stop."
     )
-    return EXPENSE_TITLE
+    
+    await update.message.reply_text(help_text, parse_mode="Markdown")
+    return EXPENSE_TITLE  # Reuse state for single message
 
 
 async def add_expense_title(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Receive expense title"""
-    context.user_data['expense_title'] = update.message.text
-    
-    await update.message.reply_text(
-        "✅ Title saved.\n\n"
-        "Now enter the amount (in ₹):"
-    )
-    return EXPENSE_AMOUNT
-
-
-async def add_expense_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Receive expense amount"""
-    is_valid, amount, error = validate_amount(update.message.text)
-    
-    if not is_valid:
-        await update.message.reply_text(f"❌ {error}\n\nPlease enter a valid amount:")
-        return EXPENSE_AMOUNT
-    
-    context.user_data['expense_amount'] = amount
-    
-    await update.message.reply_text(
-        "✅ Amount saved.\n\n"
-        "Select category:\n"
-        "1. Office Supplies\n"
-        "2. Travel\n"
-        "3. Marketing\n"
-        "4. Software\n"
-        "5. Equipment\n"
-        "6. Utilities\n"
-        "7. Professional Services\n"
-        "8. Training\n"
-        "9. Maintenance\n"
-        "10. Other\n\n"
-        "Reply with the number or name:"
-    )
-    return EXPENSE_CATEGORY
-
-
-async def add_expense_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Receive expense category"""
-    category_map = {
-        "1": "office_supplies",
-        "2": "travel",
-        "3": "marketing",
-        "4": "software",
-        "5": "equipment",
-        "6": "utilities",
-        "7": "professional_services",
-        "8": "training",
-        "9": "maintenance",
-        "10": "other",
-    }
-    
-    text = update.message.text.lower()
-    category = category_map.get(text, text.replace(" ", "_"))
-    
-    valid_categories = list(category_map.values())
-    if category not in valid_categories:
-        await update.message.reply_text("❌ Invalid category. Please select a valid option:")
-        return EXPENSE_CATEGORY
-    
-    context.user_data['expense_category'] = category
-    
-    await update.message.reply_text(
-        "✅ Category saved.\n\n"
-        "Enter expense date (YYYY-MM-DD):"
-    )
-    return EXPENSE_DATE
-
-
-async def add_expense_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Receive expense date"""
-    is_valid, date, error = validate_date(update.message.text)
-    
-    if not is_valid:
-        await update.message.reply_text(f"❌ {error}\n\nPlease enter a valid date:")
-        return EXPENSE_DATE
-    
-    context.user_data['expense_date'] = date
-    
-    await update.message.reply_text(
-        "✅ Date saved.\n\n"
-        "Enter vendor name (or send /skip):"
-    )
-    return EXPENSE_VENDOR
-
-
-async def add_expense_vendor(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Receive vendor and create expense"""
-    if update.message.text != "/skip":
-        context.user_data['expense_vendor'] = update.message.text
-    
+    """Parse and create expense from single message"""
+    message_text = update.message.text.strip()
     user_info = get_user_info(update)
     
-    # Create expense
-    try:
-        expense_data = ExpenseCreate(
-            title=context.user_data['expense_title'],
-            amount=context.user_data['expense_amount'],
-            category=context.user_data['expense_category'],
-            expense_date=context.user_data['expense_date'],
-            vendor=context.user_data.get('expense_vendor'),
-            priority="medium",
-            payment_method="company_card",
-        )
-        
-        # Call synchronous function
-        expense = expense_service.create_expense(expense_data, str(user_info["id"]))
-        
+    # Parse the message
+    lines = message_text.split('\n')
+    expense_data = {}
+    
+    for line in lines:
+        line = line.strip()
+        if ':' in line:
+            key, value = line.split(':', 1)
+            key = key.strip().lower()
+            value = value.strip()
+            
+            if key in ['amount', 'amt', 'price', 'cost']:
+                expense_data['amount'] = value
+            elif key in ['detail', 'details', 'description', 'desc', 'title']:
+                expense_data['detail'] = value
+            elif key in ['date', 'transaction date', 'expense date']:
+                expense_data['date'] = value
+            elif key in ['notes', 'note', 'additional notes', 'comments']:
+                expense_data['notes'] = value
+    
+    # Validate required fields
+    errors = []
+    
+    if 'amount' not in expense_data:
+        errors.append("❌ Amount is required")
+    else:
+        is_valid, amount, error = validate_amount(expense_data['amount'])
+        if not is_valid:
+            errors.append(f"❌ Invalid amount: {error}")
+        else:
+            expense_data['amount'] = amount
+    
+    if 'detail' not in expense_data:
+        errors.append("❌ Detail/Description is required")
+    
+    # Validate optional date
+    if 'date' in expense_data:
+        is_valid, date, error = validate_date(expense_data['date'])
+        if not is_valid:
+            errors.append(f"❌ Invalid date: {error}")
+        else:
+            expense_data['date'] = date
+    else:
+        # Use today's date if not provided
+        from datetime import datetime
+        expense_data['date'] = datetime.now().strftime('%Y-%m-%d')
+    
+    # If there are errors, show them
+    if errors:
+        error_msg = "\n".join(errors)
         await update.message.reply_text(
-            f"✅ *Expense created successfully!*\n\n"
-            f"{format_expense_summary(expense)}",
+            f"{error_msg}\n\n"
+            "Please try again with the correct format:\n\n"
+            "```\n"
+            "Amount: 1500\n"
+            "Detail: Office supplies\n"
+            "Date: 2025-12-14\n"
+            "Notes: Optional notes\n"
+            "```",
             parse_mode="Markdown"
         )
-    except Exception as e:
-        await update.message.reply_text(f"❌ Error creating expense: {str(e)}")
+        return EXPENSE_TITLE
     
-    # Clear user data
-    context.user_data.clear()
+    # Create the expense
+    try:
+        expense = ExpenseCreate(
+            title=expense_data['detail'][:50],  # Use first 50 chars as title
+            description=expense_data['detail'],
+            amount=expense_data['amount'],
+            category="other",  # Default category
+            priority="medium",  # Default priority
+            expense_date=expense_data['date'],
+            payment_method="cash",  # Default payment method
+            notes=expense_data.get('notes'),
+            vendor=None
+        )
+        
+        created_expense = expense_service.create_expense(expense, user_info['id'])
+        
+        # Format success message
+        success_msg = (
+            "✅ *Expense Created Successfully!*\n\n"
+            f"💰 *Amount:* ₹{created_expense.amount:,.2f}\n"
+            f"📝 *Detail:* {created_expense.description}\n"
+            f"📅 *Date:* {created_expense.expense_date}\n"
+        )
+        
+        if created_expense.notes:
+            success_msg += f"📌 *Notes:* {created_expense.notes}\n"
+        
+        success_msg += (
+            f"\n🆔 *ID:* `{created_expense.id}`\n"
+            f"⏳ *Status:* {created_expense.status.upper()}\n"
+        )
+        
+        await update.message.reply_text(success_msg, parse_mode="Markdown")
+        
+    except Exception as e:
+        await update.message.reply_text(
+            f"❌ Failed to create expense: {str(e)}\n\n"
+            "Please try again or contact support."
+        )
+    
     return ConversationHandler.END
 
 
 async def cancel_expense_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Cancel the conversation"""
-    await update.message.reply_text("Operation cancelled.")
+    await update.message.reply_text("❌ Operation cancelled.")
     context.user_data.clear()
     return ConversationHandler.END
 
 
 def add_expense_conversation():
-    """Create conversation handler for adding expenses"""
+    """Create conversation handler for adding expenses - single message format"""
     return ConversationHandler(
         entry_points=[CommandHandler("add_expense", add_expense_start)],
         states={
-            EXPENSE_TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_expense_title)],
-            EXPENSE_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_expense_amount)],
-            EXPENSE_CATEGORY: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_expense_category)],
-            EXPENSE_DATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_expense_date)],
-            EXPENSE_VENDOR: [
-                CommandHandler("skip", add_expense_vendor),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, add_expense_vendor)
+            EXPENSE_TITLE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, add_expense_title),
             ],
         },
         fallbacks=[CommandHandler("cancel", cancel_expense_conversation)],

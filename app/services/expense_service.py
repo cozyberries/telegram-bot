@@ -40,13 +40,19 @@ def get_expense_by_id(expense_id: str) -> Optional[Expense]:
 
 def create_expense(expense_data: ExpenseCreate, user_id: str) -> Expense:
     """Create a new expense"""
-    data = expense_data.model_dump()
+    data = expense_data.model_dump(exclude_none=True)
     data["user_id"] = user_id
     data["status"] = "pending"
+    
+    # Remove None values to avoid database errors
+    data = {k: v for k, v in data.items() if v is not None}
     
     response = supabase.table("expenses")\
         .insert(data)\
         .execute()
+    
+    if not response.data:
+        raise ValueError("Failed to create expense - no data returned")
     
     return Expense(**response.data[0])
 

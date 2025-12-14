@@ -78,6 +78,12 @@ from app.bot.bot import bot
 from app.services.notification_service import send_order_notification
 from app.database.models import Order
 
+# Import routers
+from app.routers import expenses
+
+# Include routers
+app.include_router(expenses.router)
+
 
 @app.on_event("startup")
 async def startup_event():
