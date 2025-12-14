@@ -70,15 +70,22 @@ async def handle_expenses_menu(update: Update, context: ContextTypes.DEFAULT_TYP
                 pass
     
     elif data == "start_add_expense":
-        from app.bot.handlers import expenses
-        # Trigger add_expense_start - now properly handles callback_query
+        # Inform user to use command - can't start conversation from callback in current setup
         try:
-            return await expenses.add_expense_start(update, context)
+            text = (
+                "➕ *Add New Expense*\n\n"
+                "Please use the /add\\_expense command to start adding a new expense\\.\n\n"
+                "_Just type:_ `/add_expense`"
+            )
+            await query.edit_message_text(
+                text,
+                parse_mode="MarkdownV2"
+            )
         except Exception as e:
-            logger.error(f"Failed to start add expense: {e}", exc_info=True)
+            logger.error(f"Failed to edit message: {e}", exc_info=True)
             try:
                 await query.message.reply_text(
-                    "❌ Error starting expense creation. Please use /add_expense command instead."
+                    "Please use the /add_expense command to add a new expense."
                 )
             except Exception:
                 pass
