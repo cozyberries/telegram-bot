@@ -96,11 +96,9 @@ async def startup_event():
         
         # Only initialize if environment variables are set
         if os.getenv("TELEGRAM_BOT_TOKEN"):
-            if not bot._initialized:
-                bot.initialize()
-            logger.info("Bot initialized successfully")
+            logger.info("Bot configured (initialization will happen per-request)")
         else:
-            logger.warning("TELEGRAM_BOT_TOKEN not set - bot not initialized")
+            logger.warning("TELEGRAM_BOT_TOKEN not set - bot will not function")
     except Exception as e:
         logger.error(f"Failed to initialize bot: {e}", exc_info=True)
         try:
@@ -277,9 +275,7 @@ async def telegram_webhook(request: Request):
         except Exception as e:
             logger.warning(f"Could not log to Logfire: {e}")
         
-        # Initialize bot if needed
-        if not bot._initialized:
-            bot.initialize()
+
         
         # Process update
         await bot.process_update(update_data)

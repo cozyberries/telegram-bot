@@ -67,25 +67,15 @@ async def process_telegram_webhook_async(update_data: Dict[str, Any]) -> Dict[st
     try:
         bot = get_or_create_bot()
         
-        # Ensure bot is initialized
-        if not bot._initialized:
-            if not os.getenv("TELEGRAM_BOT_TOKEN"):
-                return {
-                    'statusCode': 503,
-                    'body': json.dumps({
-                        'ok': False,
-                        'error': 'Bot not configured - TELEGRAM_BOT_TOKEN missing'
-                    })
-                }
-            bot.initialize()
-        
-        # Ensure the application is initialized for webhook mode
-        if bot.application and not bot.application.running:
-            try:
-                await bot.application.initialize()
-                logger.info("✅ Application initialized for webhook processing")
-            except Exception as e:
-                logger.warning(f"Application already initialized or initialization not needed: {e}")
+        # Ensure token is present
+        if not os.getenv("TELEGRAM_BOT_TOKEN"):
+            return {
+                'statusCode': 503,
+                'body': json.dumps({
+                    'ok': False,
+                    'error': 'Bot not configured - TELEGRAM_BOT_TOKEN missing'
+                })
+            }
         
         update_id = update_data.get('update_id', 'unknown')
         logger.info(f"📨 Processing update: {update_id}")

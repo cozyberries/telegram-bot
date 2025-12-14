@@ -128,19 +128,8 @@ class handler(BaseHTTPRequestHandler):
             except:
                 pass  # Silent failure
             
-            # Initialize bot if not already initialized
-            if not bot._initialized:
-                await asyncio.to_thread(bot.initialize)
-            
-            # Initialize the Application for python-telegram-bot 21.9+
-            if not bot.application._initialized:
-                await bot.application.initialize()
-            
-            # Create Update object from JSON data
-            update = Update.de_json(update_data, bot.application.bot)
-            
-            # Process the update
-            await bot.application.process_update(update)
+            # Process the update using the bot instance which manages the application lifecycle
+            await bot.process_update(update_data)
             
             # Log success to Logfire (silent)
             try:

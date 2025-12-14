@@ -2,6 +2,7 @@
 
 import os
 import sys
+import json
 from typing import Generator
 from pathlib import Path
 import pytest
@@ -60,9 +61,26 @@ def valid_admin_id() -> int:
 @pytest.fixture(autouse=True)
 def mock_telegram_request(mocker):
     """Mock Telegram API requests to prevent real network calls"""
-    async def mock_do_request(*args, **kwargs):
-        # Return a successful dummy response
-        return 200, b'{"ok": true, "result": {"message_id": 123, "date": 1234567890, "chat": {"id": 123456789, "type": "private"}}}'
+    async def mock_do_request(url, method, request_data=None, *args, **kwargs):
+        # Default dummy response (Message)
+        result = {
+            "message_id": 123, 
+            "date": 1234567890, 
+            "chat": {"id": 123456789, "type": "private"},
+            "text": "mock response"
+        }
+        
+        # If getMe is called, return User object
+        if "getMe" in str(url):
+            result = {
+                "id": 88888888,
+                "is_bot": True,
+                "first_name": "TestBot",
+                "username": "TestBot"
+            }
+            
+            
+        return 200, json.dumps({"ok": True, "result": result}).encode('utf-8')
 
     # Patch the HTTPXRequest.do_request method in python-telegram-bot
     mocker.patch('telegram.request._httpxrequest.HTTPXRequest.do_request', side_effect=mock_do_request)

@@ -24,82 +24,74 @@ class TelegramBot:
     """Telegram bot manager"""
     
     def __init__(self):
-        """Initialize the bot application"""
-        self.application = None
-        self._initialized = False
+        """Initialize the bot wrapper"""
+        # We do not store self.application permanently effectively in serverless
+        # because the loop changes. We will create it on demand.
+        self._global_application = None 
     
-    def initialize(self) -> Application:
+    async def get_application(self) -> Application:
         """
-        Initialize and configure the bot application
-        
-        Returns:
-            Application: Configured bot application
+        Create and initialize a fresh bot application for the current event loop.
+        This is critical for Vercel/Serverless where asyncio.run() creates a new loop per request.
         """
-        if self._initialized and self.application:
-            return self.application
-        
         try:
-            logger.info(f"Initializing bot with token: {settings.telegram_bot_token[:10]}...")
+            logger.info(f"Creating new bot application with token: {settings.telegram_bot_token[:10]}...")
             
             # Create application
-            self.application = (
+            application = (
                 Application.builder()
                 .token(settings.telegram_bot_token)
                 .build()
             )
             
-            # Initialize the application for webhook mode
-            # This is required for processing updates without polling
-            import asyncio
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_closed():
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                
-                # Check if event loop is already running
-                if not loop.is_running():
-                    # Initialize the application
-                    loop.run_until_complete(self.application.initialize())
-                    logger.info("Application initialized for webhook mode")
-                else:
-                    # For testing: create a new task to initialize
-                    logger.info("Event loop already running, scheduling async initialization")
-                    # We'll initialize later when processing first update
-            except Exception as e:
-                logger.warning(f"Could not initialize application with event loop: {e}")
-                # Application will be initialized on first update
-                pass
-            
             # Register handlers
-            self._register_handlers()
+            self._register_handlers(application)
             
             # Register error handler
-            self.application.add_error_handler(self._error_handler)
+            application.add_error_handler(self._error_handler)
             
-            self._initialized = True
-            logger.info("Bot application initialized successfully")
+            # Initialize the application (sets up http client on current loop)
+            await application.initialize()
+            logger.info("Bot application initialized successfully for current request")
             
-            return self.application
+            return application
             
         except Exception as e:
-            logger.error(f"Failed to initialize bot: {e}", exc_info=True)
+            logger.error(f"Failed to create and initialize bot application: {e}", exc_info=True)
             raise
     
-    def _register_handlers(self):
+    @property
+    def _initialized(self):
+        """Compatibility property for checking if a global app is initialized"""
+        return self._global_application is not None
+
+    def stop(self):
+        """Stop the bot and cleanup resources"""
+        try:
+            if self._global_application:
+                logger.info("Stopping global bot application...")
+                # We can't really await here in sync method, but normally stop is called at shutdown
+                # If we are in async context, we should await application.shutdown()
+                # But since we store it in _global_application, strict cleanup might be needed if running persistently
+                self._global_application = None
+                logger.info("Bot stopped")
+        except Exception as e:
+            logger.error(f"Error stopping bot: {e}")
+    
+    def _register_handlers(self, application: Application):
         """Register all command and callback handlers"""
         try:
             from app.bot.handlers import start, expenses, menu
             
             # Main menu and start commands
-            self.application.add_handler(CommandHandler("start", start.start_command))
-            self.application.add_handler(CommandHandler("menu", start.menu_command))
+            application.add_handler(CommandHandler("start", start.start_command))
+            application.add_handler(CommandHandler("menu", start.menu_command))
             
             # Expense handlers
-            self.application.add_handler(CommandHandler("expenses", expenses.list_expenses_command))
-            self.application.add_handler(CommandHandler("expense", expenses.get_expense_command))
-            self.application.add_handler(expenses.add_expense_conversation())
-            self.application.add_handler(CommandHandler("delete_expense", expenses.delete_expense_command))
+            application.add_handler(CommandHandler("expenses", expenses.list_expenses_command))
+            application.add_handler(CommandHandler("expense", expenses.get_expense_command))
+            application.add_handler(expenses.add_expense_conversation())
+            application.add_handler(CommandHandler("delete_expense", expenses.delete_expense_command))
             
             # Stats command for expenses
             from app.services import expense_service
@@ -113,10 +105,10 @@ class TelegramBot:
                 except Exception as e:
                     await update.message.reply_text(f"Error fetching statistics: {str(e)}")
             
-            self.application.add_handler(CommandHandler("stats", stats_command_wrapper))
+            application.add_handler(CommandHandler("stats", stats_command_wrapper))
             
             # Callback query handler for inline buttons
-            self.application.add_handler(CallbackQueryHandler(self._handle_callback_query))
+            application.add_handler(CallbackQueryHandler(self._handle_callback_query))
             
             logger.info("All command handlers registered successfully")
             
@@ -187,6 +179,21 @@ class TelegramBot:
     
     async def set_bot_commands(self):
         """Set bot commands for Telegram UI"""
+        # This method should ideally be called once at deployment or startup,
+        # not per request, as it sets global bot commands.
+        # It will use a temporary application instance if self._global_application is not set.
+        application = self._global_application
+        if not application:
+            # Create a temporary application just to set commands
+            logger.info("Creating temporary application to set bot commands...")
+            application = (
+                Application.builder()
+                .token(settings.telegram_bot_token)
+                .build()
+            )
+            await application.initialize()
+            self._global_application = application # Store for potential reuse if not serverless
+            
         commands = [
             BotCommand("start", "Show all available commands"),
             BotCommand("products", "List all products"),
@@ -203,8 +210,12 @@ class TelegramBot:
             BotCommand("stats", "View overall statistics"),
         ]
         
-        await self.application.bot.set_my_commands(commands)
+        await application.bot.set_my_commands(commands)
         logger.info("Bot commands set successfully")
+        
+        # If this was a temporary application, shut it down
+        if not self._global_application: # If it wasn't stored, it was temporary
+            await application.shutdown()
     
     async def process_update(self, update_data: dict):
         """
@@ -214,37 +225,25 @@ class TelegramBot:
             update_data: Update data from Telegram
         """
         try:
-            if not self._initialized:
-                self.initialize()
-            
-            # Ensure application is initialized for async context
-            if not self.application._initialized:
-                await self.application.initialize()
+            # For each update, get a fresh application on the current loop
+            application = await self.get_application()
             
             logger.info(f"Processing update: {update_data.get('update_id')}")
             
             # Create Update object from JSON
-            update = Update.de_json(update_data, self.application.bot)
+            update = Update.de_json(update_data, application.bot)
             
             # Process the update through the application
-            await self.application.process_update(update)
+            await application.process_update(update)
             
             logger.info(f"Update {update_data.get('update_id')} processed successfully")
+            
+            # Cleanup
+            await application.shutdown()
             
         except Exception as e:
             logger.error(f"Error processing update: {e}", exc_info=True)
             raise
-    
-    def stop(self):
-        """Stop the bot and cleanup resources"""
-        try:
-            if self._initialized and self.application:
-                logger.info("Stopping bot application...")
-                # Don't call shutdown in Lambda - let the container handle it
-                self._initialized = False
-                logger.info("Bot stopped")
-        except Exception as e:
-            logger.error(f"Error stopping bot: {e}")
 
 
 # Global bot instance
