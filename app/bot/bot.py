@@ -152,7 +152,7 @@ class TelegramBot:
                     # Handle expense conversation menu callbacks
                     pass  # Already answered above
             
-            elif data.startswith("expenses_"):
+            elif data.startswith("expenses_") or data == "start_add_expense":
                 # Handle expenses interactive menu
                 from app.bot.handlers.expenses_menu import handle_expenses_menu
                 await handle_expenses_menu(update, context)
