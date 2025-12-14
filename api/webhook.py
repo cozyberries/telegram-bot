@@ -7,7 +7,8 @@ import os
 from http.server import BaseHTTPRequestHandler
 from telegram import Update
 
-logging.basicConfig(level=logging.INFO)
+# Set logging to WARNING to reduce verbosity (only errors and warnings)
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
@@ -19,7 +20,7 @@ class handler(BaseHTTPRequestHandler):
         update_data = {}
         
         try:
-            # Initialize Logfire on first request
+            # Initialize Logfire on first request (silent)
             self._ensure_logfire_configured()
             
             # Read request body
@@ -29,11 +30,8 @@ class handler(BaseHTTPRequestHandler):
             # Parse JSON
             update_data = json.loads(body.decode('utf-8'))
             
-            update_id = update_data.get('update_id')
-            logger.info(f"📨 Received update: {update_id}")
-            
-            # Log to Logfire
-            self._log_to_logfire("webhook_request_received", update_id=update_id)
+            # Log to Logfire (silent - Logfire handles it)
+            self._log_to_logfire("webhook_request_received", update_id=update_data.get('update_id'))
             
             # Process update
             asyncio.run(self.process_telegram_update(update_data))
@@ -44,10 +42,8 @@ class handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({"ok": True}).encode())
             
-            logger.info(f"✅ Successfully processed update {update_id}")
-            
         except Exception as e:
-            logger.error(f"❌ Error processing webhook: {e}", exc_info=True)
+            logger.error(f"❌ Webhook error: {e}")
             
             # Log error to Logfire
             self._log_error_to_logfire(e, update_data)
@@ -59,39 +55,32 @@ class handler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps({"ok": False, "error": str(e)}).encode())
     
     def _ensure_logfire_configured(self):
-        """Ensure Logfire is configured (called on first request)"""
+        """Ensure Logfire is configured (silent)"""
         try:
             from app.logging_config import configure_logfire, is_logfire_enabled
             
             if not is_logfire_enabled():
-                result = configure_logfire()
-                if result:
-                    logger.info("✅ Logfire configured successfully")
-                else:
-                    logger.warning("⚠️ Logfire not configured (token missing?)")
+                configure_logfire()  # Silent - no logging
         except Exception as e:
-            logger.error(f"Failed to configure Logfire: {e}")
+            logger.error(f"Logfire config failed: {e}")
     
     def _log_to_logfire(self, event: str, **kwargs):
-        """Log an event to Logfire"""
+        """Log an event to Logfire (silent)"""
         try:
             from app.logging_config import log_event, is_logfire_enabled
             
             if is_logfire_enabled():
                 log_event(event, **kwargs)
-                logger.info(f"🔥 Logged to Logfire: {event}")
-            else:
-                logger.debug(f"Logfire disabled: {event}")
-        except Exception as e:
-            logger.error(f"Failed to log to Logfire: {e}")
+        except:
+            pass  # Silent failure
     
     def _log_error_to_logfire(self, error: Exception, context: dict):
         """Log an error to Logfire"""
         try:
             from app.logging_config import log_error
             log_error(error, {"endpoint": "webhook", "context": context})
-        except Exception as e:
-            logger.error(f"Failed to log error to Logfire: {e}")
+        except:
+            pass  # Silent failure
     
     async def process_telegram_update(self, update_data: dict):
         """Process Telegram update asynchronously"""
@@ -100,9 +89,8 @@ class handler(BaseHTTPRequestHandler):
         try:
             # Import here to avoid issues with module loading
             from app.bot.bot import bot
-            from app.config import settings
             
-            # Extract update info
+            # Extract update info for Logfire
             update_id = update_data.get('update_id')
             user_id = None
             command = None
@@ -112,9 +100,7 @@ class handler(BaseHTTPRequestHandler):
                 user_id = msg.get('from', {}).get('id')
                 command = msg.get('text', '').split()[0] if msg.get('text') else None
             
-            logger.info(f"Processing update {update_id}: user={user_id}, command={command}")
-            
-            # Start Logfire span
+            # Start Logfire span (silent)
             try:
                 from app.logging_config import log_bot_update, is_logfire_enabled
                 
@@ -122,21 +108,16 @@ class handler(BaseHTTPRequestHandler):
                     span = log_bot_update(update_id, user_id, command)
                     if span:
                         span.__enter__()
-                        logger.info(f"🔥 Started Logfire span for update {update_id}")
-            except Exception as e:
-                logger.error(f"Failed to start Logfire span: {e}")
+            except:
+                pass  # Silent failure
             
             # Initialize bot if not already initialized
             if not bot._initialized:
-                logger.info("Initializing bot...")
                 await asyncio.to_thread(bot.initialize)
-                logger.info("Bot initialized")
             
-            # CRITICAL: Initialize the Application for python-telegram-bot 21.9+
+            # Initialize the Application for python-telegram-bot 21.9+
             if not bot.application._initialized:
-                logger.info("Initializing Application...")
                 await bot.application.initialize()
-                logger.info("Application initialized")
             
             # Create Update object from JSON data
             update = Update.de_json(update_data, bot.application.bot)
@@ -144,9 +125,7 @@ class handler(BaseHTTPRequestHandler):
             # Process the update
             await bot.application.process_update(update)
             
-            logger.info(f"✅ Successfully processed update {update_id}")
-            
-            # Log success to Logfire
+            # Log success to Logfire (silent)
             try:
                 from app.logging_config import log_event, is_logfire_enabled
                 if is_logfire_enabled():
@@ -155,9 +134,9 @@ class handler(BaseHTTPRequestHandler):
                 pass
             
         except Exception as e:
-            logger.error(f"❌ Error in process_telegram_update: {e}", exc_info=True)
+            logger.error(f"❌ Update processing error: {e}")
             
-            # Log error
+            # Log error to Logfire
             try:
                 from app.logging_config import log_event, is_logfire_enabled
                 if is_logfire_enabled():
@@ -201,6 +180,6 @@ class handler(BaseHTTPRequestHandler):
             
             self.wfile.write(json.dumps(response).encode())
         except Exception as e:
-            logger.error(f"Error handling GET request: {e}")
+            logger.error(f"GET request error: {e}")
             self.send_response(500)
             self.end_headers()

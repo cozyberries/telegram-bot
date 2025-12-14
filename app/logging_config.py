@@ -4,7 +4,9 @@ import os
 import logging
 from typing import Optional
 
+# Set logging to WARNING to reduce console noise
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
 
 # Global flag to track if Logfire is configured
 _logfire_configured = False
@@ -16,13 +18,12 @@ try:
     from logfire import LogfireSpan
     _logfire_available = True
 except ImportError:
-    logger.warning("Logfire not installed - observability disabled")
     _logfire_available = False
 
 
 def configure_logfire() -> bool:
     """
-    Configure Logfire for application observability
+    Configure Logfire for application observability (silent operation)
     
     Returns:
         bool: True if configured successfully, False otherwise
@@ -30,11 +31,9 @@ def configure_logfire() -> bool:
     global _logfire_configured
     
     if _logfire_configured:
-        logger.info("Logfire already configured")
         return True
     
     if not _logfire_available:
-        logger.warning("Logfire not available - skipping configuration")
         return False
     
     try:
@@ -42,33 +41,27 @@ def configure_logfire() -> bool:
         logfire_token = os.getenv("LOGFIRE_TOKEN")
         
         if not logfire_token:
-            logger.warning("⚠️ LOGFIRE_TOKEN not set - Logfire logging disabled")
             return False
         
         project_name = os.getenv("LOGFIRE_PROJECT_NAME", "cozyberries-telegram-bot")
         
-        logger.info(f"🔥 Configuring Logfire: {project_name}")
-        logger.info(f"Token present: {logfire_token[:10]}...")
-        
         # Configure Logfire with minimal settings for serverless
-        # Note: 'environment' parameter removed in logfire 0.54.0+
         logfire.configure(
             token=logfire_token,
             service_name=project_name,
             send_to_logfire=True,
-            console=False,
+            console=False,  # Don't log to console
         )
         
-        # Test that it works
-        logfire.info("logfire_initialized", message="Logfire configured successfully")
+        # Test that it works (silent)
+        logfire.info("logfire_initialized", message="Logfire configured")
         
         _logfire_configured = True
-        logger.info(f"✅ Logfire configured successfully: {project_name}")
         
         return True
         
     except Exception as e:
-        logger.error(f"❌ Failed to configure Logfire: {e}", exc_info=True)
+        logger.error(f"Logfire config failed: {e}")
         return False
 
 
@@ -79,7 +72,7 @@ def is_logfire_enabled() -> bool:
 
 def log_bot_update(update_id: int, user_id: Optional[int] = None, command: Optional[str] = None):
     """
-    Log a bot update with context
+    Log a bot update with context (silent)
     
     Args:
         update_id: Telegram update ID
@@ -87,7 +80,6 @@ def log_bot_update(update_id: int, user_id: Optional[int] = None, command: Optio
         command: Command being executed
     """
     if not is_logfire_enabled():
-        logger.debug(f"Bot update (Logfire disabled): {update_id}, user={user_id}, cmd={command}")
         return None
     
     try:
@@ -97,13 +89,12 @@ def log_bot_update(update_id: int, user_id: Optional[int] = None, command: Optio
             user_id=user_id,
             command=command,
         )
-    except Exception as e:
-        logger.error(f"Error logging bot update: {e}")
+    except:
         return None
 
 
 def log_api_request(endpoint: str, method: str = "POST"):
-    """Log an API request"""
+    """Log an API request (silent)"""
     if not is_logfire_enabled():
         return None
     
@@ -113,13 +104,12 @@ def log_api_request(endpoint: str, method: str = "POST"):
             endpoint=endpoint,
             method=method,
         )
-    except Exception as e:
-        logger.error(f"Error logging API request: {e}")
+    except:
         return None
 
 
 def log_database_operation(operation: str, table: str, record_id: Optional[str] = None):
-    """Log a database operation"""
+    """Log a database operation (silent)"""
     if not is_logfire_enabled():
         return None
     
@@ -130,15 +120,13 @@ def log_database_operation(operation: str, table: str, record_id: Optional[str] 
             table=table,
             record_id=record_id,
         )
-    except Exception as e:
-        logger.error(f"Error logging database operation: {e}")
+    except:
         return None
 
 
 def log_error(error: Exception, context: Optional[dict] = None) -> None:
     """Log an error with context"""
     if not is_logfire_enabled():
-        logger.error(f"Error (Logfire disabled): {error}", exc_info=True)
         return
     
     try:
@@ -148,14 +136,13 @@ def log_error(error: Exception, context: Optional[dict] = None) -> None:
             error_type=type(error).__name__,
             context=context or {},
         )
-    except Exception as e:
-        logger.error(f"Error logging to Logfire: {e}")
+    except:
+        pass
 
 
 def log_metric(name: str, value: float, tags: Optional[dict] = None) -> None:
-    """Log a metric"""
+    """Log a metric (silent)"""
     if not is_logfire_enabled():
-        logger.info(f"Metric (Logfire disabled): {name}={value}")
         return
     
     try:
@@ -164,17 +151,16 @@ def log_metric(name: str, value: float, tags: Optional[dict] = None) -> None:
             value=value,
             **(tags or {}),
         )
-    except Exception as e:
-        logger.error(f"Error logging metric: {e}")
+    except:
+        pass
 
 
 def log_event(event_name: str, **kwargs) -> None:
-    """Log a custom event"""
+    """Log a custom event (silent)"""
     if not is_logfire_enabled():
-        logger.info(f"Event (Logfire disabled): {event_name} - {kwargs}")
         return
     
     try:
         logfire.info(event_name, **kwargs)
-    except Exception as e:
-        logger.error(f"Error logging event: {e}")
+    except:
+        pass
