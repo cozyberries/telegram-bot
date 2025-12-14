@@ -15,6 +15,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Configure Logfire early (if available)
+try:
+    from app.logging_config import configure_logfire, log_api_request, log_event, is_logfire_enabled
+    logfire_configured = configure_logfire()
+    if logfire_configured:
+        logger.info("✅ Logfire configured for FastAPI")
+except Exception as e:
+    logger.warning(f"Logfire not configured: {e}")
+    logfire_configured = False
+
 # Initialize FastAPI app
 app = FastAPI(
     title="CozyBerries Telegram Admin Bot",
@@ -74,6 +84,16 @@ async def startup_event():
     """Initialize bot on startup"""
     try:
         logger.info("Starting CozyBerries Telegram Bot...")
+        
+        # Log startup to Logfire
+        try:
+            from app.logging_config import log_event, is_logfire_enabled
+            if is_logfire_enabled():
+                log_event("app_startup", service="telegram-bot", environment=os.getenv("LOGFIRE_ENVIRONMENT", "local"))
+                logger.info("🔥 Logged app startup to Logfire")
+        except:
+            pass
+        
         # Only initialize if environment variables are set
         if os.getenv("TELEGRAM_BOT_TOKEN"):
             if not bot._initialized:
@@ -83,6 +103,11 @@ async def startup_event():
             logger.warning("TELEGRAM_BOT_TOKEN not set - bot not initialized")
     except Exception as e:
         logger.error(f"Failed to initialize bot: {e}", exc_info=True)
+        try:
+            from app.logging_config import log_error
+            log_error(e, {"event": "startup"})
+        except:
+            pass
 
 
 @app.on_event("shutdown")
@@ -104,11 +129,21 @@ async def shutdown_event():
 )
 async def root():
     """Root endpoint"""
+    try:
+        from app.logging_config import log_api_request, is_logfire_enabled
+        if is_logfire_enabled():
+            with log_api_request("/", "GET"):
+                logger.info("🔥 Root endpoint - logged to Logfire")
+    except:
+        pass
+    
+    logger.info("Root endpoint accessed")
     return {
         "message": "CozyBerries Telegram Admin Bot API",
         "version": "1.0.0",
         "docs": "/docs",
-        "health": "/health"
+        "health": "/health",
+        "logfire_enabled": logfire_configured
     }
 
 
@@ -121,19 +156,30 @@ async def root():
 )
 async def health_check():
     """Health check endpoint"""
+    try:
+        from app.logging_config import log_api_request, log_metric, is_logfire_enabled
+        if is_logfire_enabled():
+            with log_api_request("/health", "GET"):
+                log_metric("health_check", 1)
+                logger.info("🔥 Health check - logged to Logfire")
+    except:
+        pass
+    
     bot_initialized = False
     try:
         bot_initialized = bot._initialized
     except:
         pass
     
+    logger.info("Health check endpoint accessed")
     return {
         "status": "ok",
         "service": "CozyBerries Telegram Bot",
         "timestamp": datetime.now().isoformat(),
         "version": "1.0.0",
         "bot_initialized": bot_initialized,
-        "env_configured": bool(os.getenv("TELEGRAM_BOT_TOKEN"))
+        "env_configured": bool(os.getenv("TELEGRAM_BOT_TOKEN")),
+        "logfire_enabled": logfire_configured
     }
 
 
@@ -145,12 +191,21 @@ async def health_check():
 )
 async def bot_info():
     """Get bot information"""
+    try:
+        from app.logging_config import log_api_request, is_logfire_enabled
+        if is_logfire_enabled():
+            with log_api_request("/bot-info", "GET"):
+                logger.info("🔥 Bot info - logged to Logfire")
+    except:
+        pass
+    
     admin_users_count = 0
     try:
         admin_users_count = len(settings.admin_user_ids)
     except:
         pass
     
+    logger.info("Bot info endpoint accessed")
     return {
         "status": "active",
         "bot_name": "CozyBerries Admin Bot",
@@ -164,7 +219,8 @@ async def bot_info():
             "Stock Management",
             "Analytics",
             "Notifications"
-        ]
+        ],
+        "logfire_enabled": logfire_configured
     }
 
 
@@ -182,6 +238,7 @@ async def telegram_webhook(request: Request):
     This endpoint receives updates from Telegram when users interact with the bot.
     Updates include messages, commands, callback queries, etc.
     """
+    span = None
     try:
         # Check if bot is configured
         if not os.getenv("TELEGRAM_BOT_TOKEN"):
@@ -193,6 +250,19 @@ async def telegram_webhook(request: Request):
         # Parse update data
         update_data = await request.json()
         update_id = update_data.get('update_id', 'unknown')
+        user_id = update_data.get('message', {}).get('from', {}).get('id') if 'message' in update_data else None
+        command = update_data.get('message', {}).get('text', '').split()[0] if 'message' in update_data and update_data['message'].get('text') else None
+        
+        # Start Logfire span
+        try:
+            from app.logging_config import log_bot_update, is_logfire_enabled
+            if is_logfire_enabled():
+                span = log_bot_update(update_id, user_id, command)
+                if span:
+                    span.__enter__()
+                    logger.info(f"🔥 Telegram update {update_id} - logged to Logfire")
+        except Exception as e:
+            logger.warning(f"Could not log to Logfire: {e}")
         
         logger.info(f"Received Telegram update: {update_id}")
         
@@ -209,10 +279,21 @@ async def telegram_webhook(request: Request):
         raise
     except Exception as e:
         logger.error(f"Error processing webhook: {e}", exc_info=True)
+        try:
+            from app.logging_config import log_error
+            log_error(e, {"endpoint": "webhook", "update_id": update_id})
+        except:
+            pass
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process update: {str(e)}"
         )
+    finally:
+        if span:
+            try:
+                span.__exit__(None, None, None)
+            except:
+                pass
 
 
 @app.get(
@@ -223,12 +304,22 @@ async def telegram_webhook(request: Request):
 )
 async def webhook_info():
     """Get webhook information"""
+    try:
+        from app.logging_config import log_api_request, is_logfire_enabled
+        if is_logfire_enabled():
+            with log_api_request("/webhook", "GET"):
+                logger.info("🔥 Webhook info - logged to Logfire")
+    except:
+        pass
+    
+    logger.info("Webhook info endpoint accessed")
     return {
         "status": "active",
         "endpoint": "/webhook",
         "bot": "CozyBerries Admin Bot",
         "description": "Telegram webhook for receiving bot updates",
-        "configured": bool(os.getenv("TELEGRAM_BOT_TOKEN"))
+        "configured": bool(os.getenv("TELEGRAM_BOT_TOKEN")),
+        "logfire_enabled": logfire_configured
     }
 
 
@@ -251,7 +342,19 @@ async def notify_order(request: Request):
     - `{"data": {...}}` - Alternative format
     - Direct order object
     """
+    span = None
     try:
+        # Start Logfire span
+        try:
+            from app.logging_config import log_api_request, is_logfire_enabled
+            if is_logfire_enabled():
+                span = log_api_request("/notify-order", "POST")
+                if span:
+                    span.__enter__()
+                    logger.info("🔥 Order notification - logged to Logfire")
+        except:
+            pass
+        
         # Check if bot is configured
         if not os.getenv("TELEGRAM_BOT_TOKEN"):
             raise HTTPException(
@@ -282,6 +385,13 @@ async def notify_order(request: Request):
                 detail=f"Invalid order data: {str(e)}"
             )
         
+        # Log to Logfire
+        try:
+            from app.logging_config import log_metric
+            log_metric("order_notification_received", 1, {"order_id": str(order.id)})
+        except:
+            pass
+        
         # Send notification
         await send_order_notification(order)
         
@@ -295,10 +405,21 @@ async def notify_order(request: Request):
         raise
     except Exception as e:
         logger.error(f"Error sending notification: {e}", exc_info=True)
+        try:
+            from app.logging_config import log_error
+            log_error(e, {"endpoint": "notify-order"})
+        except:
+            pass
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to send notification: {str(e)}"
         )
+    finally:
+        if span:
+            try:
+                span.__exit__(None, None, None)
+            except:
+                pass
 
 
 @app.get(
@@ -309,6 +430,15 @@ async def notify_order(request: Request):
 )
 async def notify_order_info():
     """Get notification endpoint information"""
+    try:
+        from app.logging_config import log_api_request, is_logfire_enabled
+        if is_logfire_enabled():
+            with log_api_request("/notify-order", "GET"):
+                logger.info("🔥 Notify order info - logged to Logfire")
+    except:
+        pass
+    
+    logger.info("Notify order info endpoint accessed")
     return {
         "status": "active",
         "endpoint": "/notify-order",
@@ -318,7 +448,8 @@ async def notify_order_info():
             "record": "Order data object",
             "or": "Direct order object"
         },
-        "configured": bool(os.getenv("TELEGRAM_BOT_TOKEN"))
+        "configured": bool(os.getenv("TELEGRAM_BOT_TOKEN")),
+        "logfire_enabled": logfire_configured
     }
 
 
@@ -326,6 +457,14 @@ async def notify_order_info():
 async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler"""
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    
+    # Log to Logfire
+    try:
+        from app.logging_config import log_error
+        log_error(exc, {"endpoint": str(request.url), "method": request.method})
+    except:
+        pass
+    
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
