@@ -145,9 +145,12 @@ class TelegramBot:
         elif data.startswith("stock_"):
             from app.bot.handlers import stock
             await stock.handle_stock_callback(update, context)
+        elif data.startswith("exp_page_") or data == "exp_close_browser":
+            from app.bot.handlers import expenses
+            await expenses.handle_expense_browser_callback(update, context)
         elif data.startswith("exp_"):
-            # If we get here, it means the conversation handler didn't catch it
-            # which implies the conversation state is lost/expired.
+            # If we get here and it's not a browser command, 
+            # implies the conversation state is lost/expired.
             await query.edit_message_text(
                 "⚠️ This session has expired. Please start a new expense entry with /add_expense"
             )

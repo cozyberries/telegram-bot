@@ -21,52 +21,84 @@ INPUT_CATEGORY = 5
 
 @admin_required
 async def list_expenses_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /expenses command - list expenses using Pydantic models"""
+    """Handle /expenses command - browser expenses one by one"""
     try:
-        # Get expenses with metadata
-        response = expense_service.get_expenses(limit=20)
-        
-        # Use the response's built-in formatting
-        message = response.to_telegram_message()
-        
-        await update.message.reply_text(
-            message,
-            parse_mode="Markdown"
-        )
+        # Start at offset 0
+        await show_expense_page(update, context, offset=0)
     except Exception as e:
         await update.message.reply_text(f"Error fetching expenses: {str(e)}")
 
 
-@admin_required
-async def get_expense_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /expense <id> command - get expense details"""
-    is_valid, args, error = parse_command_args(update.message.text, 1)
-    
-    if not is_valid:
-        await update.message.reply_text(
-            "Usage: /expense <expense_id>\n"
-            "Example: /expense 123e4567-e89b-12d3-a456-426614174000"
-        )
-        return
-    
-    expense_id = args[0]
-    
+async def show_expense_page(update: Update, context: ContextTypes.DEFAULT_TYPE, offset: int):
+    """Show a specific expense page"""
     try:
-        expense = expense_service.get_expense_by_id(expense_id)
+        # Get one expense at the specific offset
+        response = expense_service.get_expenses(limit=1, offset=offset)
         
-        if not expense:
-            await update.message.reply_text("❌ Expense not found")
+        if not response.expenses:
+            text = "No expenses found."
+            if update.callback_query:
+                await update.callback_query.answer("No more expenses")
+                return
+            await update.message.reply_text(text)
             return
+
+        expense = response.expenses[0]
+        total_count = response.metadata.total
         
-        # Use the response's built-in formatting
-        message = expense.to_telegram_message()
-        
-        await update.message.reply_text(
-            message,
-            parse_mode="Markdown"
+        # Format message
+        text = (
+            f"📋 *Expense {offset + 1} of {total_count}*\n\n"
+            f"{expense.to_telegram_message()}"
         )
+        
+        # Build navigation keyboard
+        keyboard = []
+        nav_row = []
+        
+        if offset > 0:
+            nav_row.append(InlineKeyboardButton("⬅️ Prev", callback_data=f"exp_page_{offset - 1}"))
+            
+        if (offset + 1) < total_count:
+            nav_row.append(InlineKeyboardButton("Next ➡️", callback_data=f"exp_page_{offset + 1}"))
+            
+        if nav_row:
+            keyboard.append(nav_row)
+            
+        keyboard.append([InlineKeyboardButton("❌ Close", callback_data="exp_close_browser")])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        # Send or Edit
+        if update.callback_query:
+            await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+        else:
+            await update.message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+            
     except Exception as e:
-        await update.message.reply_text(f"Error fetching expense: {str(e)}")
+        error_text = f"Error showing expense: {str(e)}"
+        if update.callback_query:
+            await update.callback_query.message.reply_text(error_text)
+        else:
+            await update.message.reply_text(error_text)
+
+
+async def handle_expense_browser_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle expense browser navigation"""
+    query = update.callback_query
+    data = query.data
+    
+    if data == "exp_close_browser":
+        await query.delete_message()
+        return
+
+    if data.startswith("exp_page_"):
+        try:
+            offset = int(data.split("_")[2])
+            await show_expense_page(update, context, offset)
+        except (ValueError, IndexError):
+            await query.answer("Invalid navigation")
+    
+    await query.answer()
 
 
 def get_expense_keyboard(draft: dict) -> InlineKeyboardMarkup:
