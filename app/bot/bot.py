@@ -1,0 +1,175 @@
+"""Telegram bot initialization and setup"""
+
+import logging
+from telegram import Update, BotCommand
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    CallbackQueryHandler,
+    ConversationHandler,
+    MessageHandler,
+    filters,
+)
+from app.config import settings
+
+# Configure logging
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=getattr(logging, settings.log_level.upper(), logging.INFO)
+)
+logger = logging.getLogger(__name__)
+
+
+class TelegramBot:
+    """Telegram bot manager"""
+    
+    def __init__(self):
+        """Initialize the bot application"""
+        self.application = None
+        self._initialized = False
+    
+    def initialize(self) -> Application:
+        """
+        Initialize and configure the bot application
+        
+        Returns:
+            Application: Configured bot application
+        """
+        if self._initialized and self.application:
+            return self.application
+        
+        # Create application
+        self.application = (
+            Application.builder()
+            .token(settings.telegram_bot_token)
+            .build()
+        )
+        
+        # Register handlers
+        self._register_handlers()
+        
+        # Register error handler
+        self.application.add_error_handler(self._error_handler)
+        
+        self._initialized = True
+        logger.info("Bot application initialized successfully")
+        
+        return self.application
+    
+    def _register_handlers(self):
+        """Register all command and callback handlers"""
+        from app.bot.handlers import start, products, orders, expenses, stock, analytics
+        
+        # Start and help command
+        self.application.add_handler(CommandHandler("start", start.start_command))
+        self.application.add_handler(CommandHandler("help", start.help_command))
+        
+        # Product handlers
+        self.application.add_handler(CommandHandler("products", products.list_products_command))
+        self.application.add_handler(CommandHandler("product", products.get_product_command))
+        self.application.add_handler(products.add_product_conversation())
+        self.application.add_handler(CommandHandler("update_product", products.update_product_command))
+        self.application.add_handler(CommandHandler("delete_product", products.delete_product_command))
+        self.application.add_handler(CommandHandler("product_stock", products.update_product_stock_command))
+        
+        # Order handlers
+        self.application.add_handler(CommandHandler("orders", orders.list_orders_command))
+        self.application.add_handler(CommandHandler("order", orders.get_order_command))
+        self.application.add_handler(CommandHandler("order_status", orders.update_order_status_command))
+        self.application.add_handler(orders.add_order_conversation())
+        
+        # Expense handlers
+        self.application.add_handler(CommandHandler("expenses", expenses.list_expenses_command))
+        self.application.add_handler(CommandHandler("expense", expenses.get_expense_command))
+        self.application.add_handler(expenses.add_expense_conversation())
+        self.application.add_handler(CommandHandler("approve_expense", expenses.approve_expense_command))
+        self.application.add_handler(CommandHandler("reject_expense", expenses.reject_expense_command))
+        self.application.add_handler(CommandHandler("update_expense", expenses.update_expense_command))
+        
+        # Stock handlers
+        self.application.add_handler(CommandHandler("stock", stock.list_stock_command))
+        self.application.add_handler(CommandHandler("low_stock", stock.low_stock_command))
+        self.application.add_handler(CommandHandler("update_stock", stock.update_stock_command))
+        
+        # Analytics handlers
+        self.application.add_handler(CommandHandler("stats", analytics.stats_command))
+        self.application.add_handler(CommandHandler("stats_orders", analytics.stats_orders_command))
+        self.application.add_handler(CommandHandler("stats_expenses", analytics.stats_expenses_command))
+        self.application.add_handler(CommandHandler("stats_products", analytics.stats_products_command))
+        
+        # Callback query handler for inline buttons
+        self.application.add_handler(CallbackQueryHandler(self._handle_callback_query))
+        
+        logger.info("All command handlers registered")
+    
+    async def _handle_callback_query(self, update: Update, context):
+        """Handle callback queries from inline buttons"""
+        query = update.callback_query
+        await query.answer()
+        
+        # Route to appropriate handler based on callback data
+        data = query.data
+        
+        if data.startswith("product_"):
+            from app.bot.handlers import products
+            await products.handle_product_callback(update, context)
+        elif data.startswith("order_"):
+            from app.bot.handlers import orders
+            await orders.handle_order_callback(update, context)
+        elif data.startswith("expense_"):
+            from app.bot.handlers import expenses
+            await expenses.handle_expense_callback(update, context)
+        elif data.startswith("stock_"):
+            from app.bot.handlers import stock
+            await stock.handle_stock_callback(update, context)
+        else:
+            await query.edit_message_text("Unknown action")
+    
+    async def _error_handler(self, update: Update, context):
+        """Handle errors"""
+        logger.error(f"Update {update} caused error {context.error}")
+        
+        if update and update.effective_message:
+            await update.effective_message.reply_text(
+                "⚠️ An error occurred while processing your request. "
+                "Please try again or contact support."
+            )
+    
+    async def set_bot_commands(self):
+        """Set bot commands for Telegram UI"""
+        commands = [
+            BotCommand("start", "Start the bot and see welcome message"),
+            BotCommand("help", "Show available commands"),
+            BotCommand("products", "List all products"),
+            BotCommand("product", "Get product details"),
+            BotCommand("add_product", "Add a new product"),
+            BotCommand("orders", "List recent orders"),
+            BotCommand("order", "Get order details"),
+            BotCommand("order_status", "Update order status"),
+            BotCommand("expenses", "List expenses"),
+            BotCommand("expense", "Get expense details"),
+            BotCommand("add_expense", "Add a new expense"),
+            BotCommand("stock", "View stock levels"),
+            BotCommand("low_stock", "View low stock products"),
+            BotCommand("stats", "View overall statistics"),
+        ]
+        
+        await self.application.bot.set_my_commands(commands)
+        logger.info("Bot commands set successfully")
+    
+    async def process_update(self, update_data: dict):
+        """
+        Process an update from Telegram webhook
+        
+        Args:
+            update_data: Update data from Telegram
+        """
+        if not self._initialized:
+            self.initialize()
+        
+        update = Update.de_json(update_data, self.application.bot)
+        await self.application.process_update(update)
+
+
+# Global bot instance
+bot = TelegramBot()

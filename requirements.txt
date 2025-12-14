@@ -1,0 +1,18 @@
+# Telegram Bot
+python-telegram-bot==21.0
+
+# Supabase Client
+supabase==2.3.4
+
+# Data Validation
+pydantic==2.9.2
+pydantic-settings==2.6.1
+
+# HTTP Client (compatible with supabase)
+httpx==0.25.2
+
+# Environment Variables
+python-dotenv==1.0.1
+
+# Date/Time handling
+python-dateutil==2.9.0
