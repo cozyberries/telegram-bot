@@ -12,11 +12,9 @@ from app.schemas.expenses import ExpenseInput
 from app.utils.parsers import ExpenseMessageParser, parse_command_args
 
 # Conversation states
-EXPENSE_MENU = 1
 INPUT_AMOUNT = 2
 INPUT_DESCRIPTION = 3
 INPUT_DATE = 4
-INPUT_CATEGORY = 5
 
 
 @admin_required
@@ -131,23 +129,8 @@ async def handle_expense_browser_callback(update: Update, context: ContextTypes.
 
 
 def get_expense_keyboard(draft: dict) -> InlineKeyboardMarkup:
-    """Generate the interactive form keyboard"""
-    
-    # Status indicators
-    amt_status = "✅" if draft.get('amount') else "❌"
-    desc_status = "✅" if draft.get('description') else "❌"
-    date_status = f"🗓 {draft.get('transaction_date', 'Today')}"
-    cat_status = f"📂 {draft.get('category') or 'None'}"
-    
+    """Generate simple action keyboard"""
     keyboard = [
-        [
-            InlineKeyboardButton(f"{amt_status} Set Amount", callback_data="exp_set_amount"),
-            InlineKeyboardButton(f"{desc_status} Set Desc", callback_data="exp_set_desc")
-        ],
-        [
-            InlineKeyboardButton(date_status, callback_data="exp_set_date"),
-            InlineKeyboardButton(cat_status, callback_data="exp_set_cat")
-        ],
         [
             InlineKeyboardButton("💾 Save Expense", callback_data="exp_save"),
             InlineKeyboardButton("❌ Cancel", callback_data="exp_cancel")
@@ -158,216 +141,223 @@ def get_expense_keyboard(draft: dict) -> InlineKeyboardMarkup:
 
 def get_expense_summary_text(draft: dict) -> str:
     """Generate summary text for the draft expense"""
+    amount = draft.get('amount', 'Not set')
+    description = draft.get('description', 'Not set')
+    date_val = draft.get('expense_date', 'Today')
+    
     return (
-        "📝 *New Expense Draft*\n\n"
-        f"💰 *Amount:* {draft.get('amount') or '_Not set_'}\n"
-        f"📄 *Description:* {draft.get('description') or '_Not set_'}\n"
-        f"🗓 *Date:* {draft.get('transaction_date') or 'Today'}\n"
-        f"📂 *Category:* {draft.get('category') or 'None'}\n\n"
-        "_Use the buttons below to update fields_"
+        "📝 *Expense Summary*\n\n"
+        f"💰 *Amount:* ₹{amount}\n"
+        f"📄 *Description:* {description}\n"
+        f"🗓 *Date:* {date_val}\n\n"
+        "_Review and save or cancel_"
     )
 
 
 @admin_required
 async def add_expense_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Start the add expense conversation with interactive form"""
+    """Start the add expense conversation - Step 1: Ask for amount"""
     # Initialize draft expense
     context.user_data['draft_expense'] = {}
     
-    text = get_expense_summary_text({})
-    reply_markup = get_expense_keyboard({})
+    text = (
+        "➕ *Add New Expense*\n\n"
+        "💰 Step 1 of 3\n\n"
+        "Please enter the *amount* (numbers only):\n\n"
+        "_Example: 1500 or 1500.50_"
+    )
     
     # Handle both message and callback query
     if update.callback_query:
         await update.callback_query.message.reply_text(
             text,
-            reply_markup=reply_markup,
             parse_mode="Markdown"
         )
     else:
         await update.message.reply_text(
             text,
-            reply_markup=reply_markup,
             parse_mode="Markdown"
         )
     
-    return EXPENSE_MENU
+    return INPUT_AMOUNT
 
 
-async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle interactions with the expense menu"""
-    query = update.callback_query
-    await query.answer()
-    
-    action = query.data
-    draft = context.user_data.get('draft_expense', {})
-    
-    if action == "exp_set_amount":
-        await query.edit_message_text(
-            f"💰 Current Amount: {draft.get('amount') or 'Not set'}\n\n"
-            "Please enter the new amount (e.g., 1500):"
-        )
-        return INPUT_AMOUNT
-        
-    elif action == "exp_set_desc":
-        await query.edit_message_text(
-            f"📝 Current Description: {draft.get('description') or 'Not set'}\n\n"
-            "Please enter the description:"
-        )
-        return INPUT_DESCRIPTION
-        
-    elif action == "exp_set_date":
-        await query.edit_message_text(
-            f"🗓 Current Date: {draft.get('transaction_date') or 'Today'}\n\n"
-            "Enter date (YYYY-MM-DD) or 'today':"
-        )
-        return INPUT_DATE
-        
-    elif action == "exp_set_cat":
-        await query.edit_message_text(
-            f"📂 Current Category: {draft.get('category') or 'None'}\n\n"
-            "Enter category name:"
-        )
-        return INPUT_CATEGORY
-        
-    elif action == "exp_save":
-        # Validate before saving
-        if not draft.get('amount') or not draft.get('description'):
-            await query.edit_message_text(
-                get_expense_summary_text(draft) + "\n\n⚠️ Amount and Description are required!",
-                reply_markup=get_expense_keyboard(draft),
-                parse_mode="Markdown"
-            )
-            return EXPENSE_MENU
-            
-        return await save_expense(update, context)
-        
-    elif action == "exp_cancel":
-        await query.edit_message_text("❌ Expense creation cancelled.")
-        context.user_data.clear()
-        return ConversationHandler.END
-        
-    return EXPENSE_MENU
-
-
-async def return_to_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Helper to return to the main menu after input"""
-    draft = context.user_data.get('draft_expense', {})
-    text = get_expense_summary_text(draft)
-    reply_markup = get_expense_keyboard(draft)
-    
-    await update.message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")
-    return EXPENSE_MENU
 
 
 async def input_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle amount input"""
-    text = update.message.text.strip()
+    """Receive and validate amount input - Step 2: Ask for description"""
     try:
-        amount = ExpenseMessageParser.parse_amount(text)
-        if not amount or amount <= 0:
-            raise ValueError("Invalid amount")
-            
-        context.user_data['draft_expense']['amount'] = amount
-        return await return_to_menu(update, context)
+        amount = Decimal(update.message.text.strip())
+        if amount <= 0:
+            await update.message.reply_text(
+                "❌ Amount must be positive. Please enter again:"
+            )
+            return INPUT_AMOUNT
         
-    except Exception:
-        await update.message.reply_text("❌ Invalid amount. Please enter a positive number (e.g. 1500):")
+        # Save amount
+        context.user_data['draft_expense']['amount'] = float(amount)
+        
+        # Ask for description
+        text = (
+            f"✅ Amount: ₹{amount}\n\n"
+            "📄 Step 2 of 3\n\n"
+            "Please enter the *description*:\n\n"
+            "_Example: Office supplies, Lunch with client, etc._"
+        )
+        
+        await update.message.reply_text(text, parse_mode="Markdown")
+        return INPUT_DESCRIPTION
+        
+    except (ValueError, InvalidOperation):
+        await update.message.reply_text(
+            "❌ Invalid amount. Please enter numbers only (e.g., 1500 or 1500.50):"
+        )
         return INPUT_AMOUNT
 
 
 async def input_description(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle description input"""
-    text = update.message.text.strip()
-    if len(text) < 3:
-        await update.message.reply_text("❌ Description too short. Please enter at least 3 characters:")
+    """Receive description input - Step 3: Ask for date (optional)"""
+    description = update.message.text.strip()
+    
+    if len(description) < 3:
+        await update.message.reply_text(
+            "❌ Description too short. Please enter at least 3 characters:"
+        )
         return INPUT_DESCRIPTION
-        
-    context.user_data['draft_expense']['description'] = text
-    return await return_to_menu(update, context)
+    
+    # Save description
+    context.user_data['draft_expense']['description'] = description
+    
+    # Ask for date (optional)
+    keyboard = [[InlineKeyboardButton("📅 Use Today's Date", callback_data="exp_use_today")]]
+    text = (
+        f"✅ Description: {description}\n\n"
+        "📅 Step 3 of 3 (Optional)\n\n"
+        "Enter date in *YYYY-MM-DD* format\n"
+        "Or tap the button to use today's date:\n\n"
+        "_Example: 2025-12-14_"
+    )
+    
+    await update.message.reply_text(
+        text,
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    return INPUT_DATE
 
 
 async def input_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle date input"""
-    text = update.message.text.strip().lower()
-    if text == 'today':
-        context.user_data['draft_expense']['transaction_date'] = None # Defaults to today in backend
-    else:
-        date_obj = ExpenseMessageParser.parse_date(text)
-        if not date_obj:
-            await update.message.reply_text("❌ Invalid date. Use YYYY-MM-DD or 'today':")
-            return INPUT_DATE
-        context.user_data['draft_expense']['transaction_date'] = date_obj.date()
+    """Receive date input and create expense"""
+    date_text = update.message.text.strip().lower()
+    
+    # Try to parse date
+    try:
+        if date_text == 'today' or date_text == 'skip':
+            expense_date = date.today()
+        else:
+            expense_date = date.fromisoformat(date_text)
         
-    return await return_to_menu(update, context)
+        context.user_data['draft_expense']['expense_date'] = expense_date
+        
+        # Create the expense immediately
+        return await save_expense(update, context)
+        
+    except ValueError:
+        await update.message.reply_text(
+            "❌ Invalid date format. Please use YYYY-MM-DD or type 'today':"
+        )
+        return INPUT_DATE
 
 
-async def input_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle category input"""
-    text = update.message.text.strip()
-    context.user_data['draft_expense']['category'] = text
-    return await return_to_menu(update, context)
+async def handle_use_today_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle 'Use Today's Date' button callback"""
+    query = update.callback_query
+    await query.answer()
+    
+    # Set today's date
+    context.user_data['draft_expense']['expense_date'] = date.today()
+    
+    # Create the expense
+    # Create a pseudo-update with message from callback
+    update.message = query.message
+    return await save_expense(update, context)
 
 
 async def save_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Finalize and save the expense"""
+    """Save the expense to database"""
     try:
-        draft = context.user_data['draft_expense']
+        draft = context.user_data.get('draft_expense', {})
+        
+        # Validate required fields
+        if not draft.get('amount') or not draft.get('description'):
+            await update.message.reply_text(
+                "❌ Missing required fields. Please start over with /add_expense"
+            )
+            context.user_data.clear()
+            return ConversationHandler.END
+        
+        # Get user info
         user_info = get_user_info(update)
         
+        # Create expense input
         expense_input = ExpenseInput(
-            user_id=str(user_info['id']),
-            username=user_info.get('username'),
-            amount=draft['amount'],
+            user_id=user_info['user_id'],
+            username=user_info['username'],
+            amount=Decimal(str(draft['amount'])),
             description=draft['description'],
-            transaction_date=draft.get('transaction_date'),
-            category=draft.get('category')
+            expense_date=draft.get('expense_date', date.today())
         )
         
-        created_expense = expense_service.create_expense(expense_input)
+        # Save to database
+        expense = expense_service.create_expense(expense_input)
         
-        # Determine where to send the final message (msg or callback)
-        if update.callback_query:
-            await update.callback_query.edit_message_text(
-                "✅ *Expense Saved!*\n\n" + created_expense.to_telegram_message(),
-                parse_mode="Markdown"
-            )
-        else:
-            await update.message.reply_text(
-                "✅ *Expense Saved!*\n\n" + created_expense.to_telegram_message(),
-                parse_mode="Markdown"
-            )
-            
+        # Success message
+        success_text = (
+            "✅ *Expense Created Successfully!*\n\n"
+            f"💰 *Amount:* ₹{expense.amount}\n"
+            f"📄 *Description:* {expense.description}\n"
+            f"🗓 *Date:* {expense.expense_date}\n"
+            f"🆔 *ID:* `{expense.id}`\n\n"
+            "_Use /expenses to view all expenses_"
+        )
+        
+        await update.message.reply_text(
+            success_text,
+            parse_mode="Markdown"
+        )
+        
         context.user_data.clear()
         return ConversationHandler.END
         
     except Exception as e:
         error_text = f"❌ Error saving expense: {str(e)}"
-        if update.callback_query:
-            await update.callback_query.edit_message_text(error_text)
-        else:
-            await update.message.reply_text(error_text)
+        await update.message.reply_text(error_text)
+        context.user_data.clear()
         return ConversationHandler.END
 
 
-async def cancel_expense_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Cancel the conversation"""
-    await update.message.reply_text("❌ Operation cancelled.")
+async def cancel_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Cancel the expense creation"""
     context.user_data.clear()
+    
+    # Handle both message and callback
+    if update.callback_query:
+        await update.callback_query.answer("Cancelled")
+        await update.callback_query.edit_message_text("❌ Expense creation cancelled.")
+    else:
+        await update.message.reply_text("❌ Expense creation cancelled.")
+    
     return ConversationHandler.END
 
 
 def add_expense_conversation():
-    """Create conversation handler for adding expenses"""
+    """Create conversation handler for adding expenses with simple inline flow"""
     return ConversationHandler(
         entry_points=[
             CommandHandler("add_expense", add_expense_start),
             MessageHandler(filters.Regex("^Add Expense$"), add_expense_start)
         ],
         states={
-            EXPENSE_MENU: [
-                CallbackQueryHandler(handle_menu_callback)
-            ],
             INPUT_AMOUNT: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, input_amount)
             ],
@@ -375,14 +365,15 @@ def add_expense_conversation():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, input_description)
             ],
             INPUT_DATE: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, input_date)
-            ],
-            INPUT_CATEGORY: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, input_category)
+                MessageHandler(filters.TEXT & ~filters.COMMAND, input_date),
+                CallbackQueryHandler(handle_use_today_callback, pattern="^exp_use_today$")
             ],
         },
-        fallbacks=[CommandHandler("cancel", cancel_expense_conversation)],
-        per_message=True,  # Track per message (fixes PTB warning with CallbackQueryHandler)
+        fallbacks=[
+            CommandHandler("cancel", cancel_expense),
+            CallbackQueryHandler(cancel_expense, pattern="^exp_cancel$")
+        ],
+        per_message=True,
         per_chat=True,
         per_user=True,
         allow_reentry=True
