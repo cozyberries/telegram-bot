@@ -1,15 +1,15 @@
-# Telegram Bot (version compatible with httpx 0.25)
-python-telegram-bot==20.7
+# Telegram Bot (upgraded for httpx 0.27 compatibility)
+python-telegram-bot==21.9
 
-# Supabase Client
-supabase==2.3.4
+# Supabase Client (upgraded for httpx 0.27 and gotrue fix)
+supabase==2.25.1
 
-# Data Validation
-pydantic==2.9.2
-pydantic-settings==2.6.1
+# Data Validation (upgraded with supabase)
+pydantic==2.12.5
+pydantic-settings==2.7.1
 
-# HTTP Client (compatible with both)
-httpx==0.25.2
+# HTTP Client (upgraded for compatibility)
+httpx==0.27.2
 
 # Environment Variables
 python-dotenv==1.0.1

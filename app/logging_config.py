@@ -46,16 +46,15 @@ def configure_logfire() -> bool:
             return False
         
         project_name = os.getenv("LOGFIRE_PROJECT_NAME", "cozyberries-telegram-bot")
-        environment = os.getenv("LOGFIRE_ENVIRONMENT", "production")
         
-        logger.info(f"🔥 Configuring Logfire: {project_name} ({environment})")
+        logger.info(f"🔥 Configuring Logfire: {project_name}")
         logger.info(f"Token present: {logfire_token[:10]}...")
         
         # Configure Logfire with minimal settings for serverless
+        # Note: 'environment' parameter removed in logfire 0.54.0+
         logfire.configure(
             token=logfire_token,
             service_name=project_name,
-            environment=environment,
             send_to_logfire=True,
             console=False,
         )
@@ -64,7 +63,7 @@ def configure_logfire() -> bool:
         logfire.info("logfire_initialized", message="Logfire configured successfully")
         
         _logfire_configured = True
-        logger.info(f"✅ Logfire configured successfully: {project_name} ({environment})")
+        logger.info(f"✅ Logfire configured successfully: {project_name}")
         
         return True
         
