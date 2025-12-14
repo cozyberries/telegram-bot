@@ -89,26 +89,11 @@ class TelegramBot:
     def _register_handlers(self):
         """Register all command and callback handlers"""
         try:
-            from app.bot.handlers import start, products, orders, expenses, stock, analytics, menu
-            from app.bot.handlers import products_interactive
+            from app.bot.handlers import start, expenses, menu
             
             # Main menu and start commands
             self.application.add_handler(CommandHandler("start", start.start_command))
             self.application.add_handler(CommandHandler("menu", start.menu_command))
-            
-            # Product handlers (keep original commands for backward compatibility)
-            self.application.add_handler(CommandHandler("products", products.list_products_command))
-            self.application.add_handler(CommandHandler("product", products.get_product_command))
-            self.application.add_handler(products.add_product_conversation())
-            self.application.add_handler(CommandHandler("update_product", products.update_product_command))
-            self.application.add_handler(CommandHandler("delete_product", products.delete_product_command))
-            self.application.add_handler(CommandHandler("product_stock", products.update_product_stock_command))
-            
-            # Order handlers
-            self.application.add_handler(CommandHandler("orders", orders.list_orders_command))
-            self.application.add_handler(CommandHandler("order", orders.get_order_command))
-            self.application.add_handler(CommandHandler("order_status", orders.update_order_status_command))
-            self.application.add_handler(orders.add_order_conversation())
             
             # Expense handlers
             self.application.add_handler(CommandHandler("expenses", expenses.list_expenses_command))
@@ -116,16 +101,19 @@ class TelegramBot:
             self.application.add_handler(expenses.add_expense_conversation())
             self.application.add_handler(CommandHandler("delete_expense", expenses.delete_expense_command))
             
-            # Stock handlers
-            self.application.add_handler(CommandHandler("stock", stock.list_stock_command))
-            self.application.add_handler(CommandHandler("low_stock", stock.low_stock_command))
-            self.application.add_handler(CommandHandler("update_stock", stock.update_stock_command))
+            # Stats command for expenses
+            from app.services import expense_service
             
-            # Analytics handlers
-            self.application.add_handler(CommandHandler("stats", analytics.stats_command))
-            self.application.add_handler(CommandHandler("stats_orders", analytics.stats_orders_command))
-            self.application.add_handler(CommandHandler("stats_expenses", analytics.stats_expenses_command))
-            self.application.add_handler(CommandHandler("stats_products", analytics.stats_products_command))
+            async def stats_command_wrapper(update, context):
+                """Show expense statistics"""
+                try:
+                    stats = expense_service.get_expense_stats()
+                    message = stats.to_telegram_message()
+                    await update.message.reply_text(message, parse_mode="Markdown")
+                except Exception as e:
+                    await update.message.reply_text(f"Error fetching statistics: {str(e)}")
+            
+            self.application.add_handler(CommandHandler("stats", stats_command_wrapper))
             
             # Callback query handler for inline buttons
             self.application.add_handler(CallbackQueryHandler(self._handle_callback_query))
@@ -148,19 +136,6 @@ class TelegramBot:
                 from app.bot.handlers import menu
                 await menu.handle_menu_callback(update, context)
             
-            # Products
-            elif data.startswith("products_") or data.startswith("product_"):
-                from app.bot.handlers import products_interactive
-                await products_interactive.handle_products_menu(update, context)
-            
-            # Orders
-            elif data.startswith("order"):
-                from app.bot.handlers import orders
-                if hasattr(orders, 'handle_order_callback'):
-                    await orders.handle_order_callback(update, context)
-                else:
-                    await query.answer("Orders interactive menu coming soon!")
-            
             # Expenses  
             elif data.startswith("exp_"):
                 from app.bot.handlers import expenses
@@ -168,37 +143,17 @@ class TelegramBot:
                 if data.startswith("exp_page_") or data == "exp_close_browser":
                     await expenses.handle_expense_browser_callback(update, context)
                 else:
+                    # Handle expense conversation menu callbacks
                     await query.answer("Expense menu action processed")
             
-            elif data.startswith("expense"):
-                await query.answer("Expenses interactive menu coming soon!")
-            
-            # Stock
-            elif data.startswith("stock"):
-                from app.bot.handlers import stock
-                if hasattr(stock, 'handle_stock_callback'):
-                    await stock.handle_stock_callback(update, context)
-                else:
-                    await query.answer("Stock interactive menu coming soon!")
-            
-            # Analytics
-            elif data.startswith("analytics_"):
-                from app.bot.handlers import analytics
-                # Direct call to analytics commands based on callback
-                if data == "analytics_overall":
-                    await analytics.stats_command(update, context)
-                elif data == "analytics_orders":
-                    await analytics.stats_orders_command(update, context)
-                elif data == "analytics_expenses":
-                    await analytics.stats_expenses_command(update, context)
-                elif data == "analytics_products":
-                    await analytics.stats_products_command(update, context)
-                else:
-                    await query.answer("Analytics menu action")
+            elif data.startswith("expenses_"):
+                # Handle expenses interactive menu
+                from app.bot.handlers import expenses
+                await handle_expenses_menu(update, context)
             
             # No-op (for pagination indicators)
             elif data == "noop":
-                pass
+                await query.answer()
             
             # Unknown callback
             else:
@@ -208,6 +163,57 @@ class TelegramBot:
         except Exception as e:
             logger.error(f"Error handling callback query: {e}", exc_info=True)
             await query.answer(f"Error: {str(e)}", show_alert=True)
+
+
+async def handle_expenses_menu(update: Update, context):
+    """Handle expenses menu callbacks"""
+    query = update.callback_query
+    data = query.data
+    
+    if data == "expenses_list_all":
+        from app.bot.handlers import expenses
+        # Redirect to list expenses
+        await expenses.list_expenses_command(update, context)
+    
+    elif data == "expenses_create":
+        from app.bot.handlers import expenses
+        # Start the add expense conversation
+        text = (
+            "➕ *Add New Expense*\n\n"
+            "Please use the /add_expense command to start adding a new expense.\n\n"
+            "Or tap the button below:"
+        )
+        keyboard = [
+            [InlineKeyboardButton("Start Adding Expense", callback_data="start_add_expense")],
+            [InlineKeyboardButton("« Back", callback_data="menu_expenses")]
+        ]
+        await query.edit_message_text(
+            text,
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    
+    elif data == "start_add_expense":
+        from app.bot.handlers import expenses
+        # Trigger add_expense_start
+        await expenses.add_expense_start(update, context)
+    
+    elif data == "expenses_stats":
+        from app.services import expense_service
+        try:
+            stats = expense_service.get_expense_stats()
+            message = "📊 *Expense Statistics*\n\n" + stats.to_telegram_message()
+            
+            keyboard = [[InlineKeyboardButton("« Back to Expenses", callback_data="menu_expenses")]]
+            await query.edit_message_text(
+                message,
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        except Exception as e:
+            await query.answer(f"Error: {str(e)}", show_alert=True)
+    
+    await query.answer()
     
     async def _error_handler(self, update: Update, context):
         """Handle errors"""

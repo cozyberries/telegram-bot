@@ -12,15 +12,15 @@ class ExpenseInput(CommandInput):
     """Input schema for creating/updating expenses"""
     amount: Decimal = Field(..., gt=0, description="Expense amount (must be positive)")
     description: str = Field(..., min_length=3, max_length=500, description="Expense description")
-    transaction_date: Optional[date] = Field(None, description="Transaction date (defaults to today)")
+    transaction_date: Optional[date] = Field(None, description="Transaction date (optional, will use created_at if not provided)")
     category: Optional[str] = Field(None, max_length=100, description="Expense category")
     
     @field_validator('transaction_date', mode='before')
     @classmethod
-    def set_default_date(cls, v):
-        """Set default date to today if not provided"""
+    def validate_date(cls, v):
+        """Validate date if provided"""
         if v is None:
-            return date.today()
+            return None
         if isinstance(v, str):
             return datetime.strptime(v, '%Y-%m-%d').date()
         return v
@@ -47,7 +47,7 @@ class ExpenseInput(CommandInput):
     class Config:
         json_encoders = {
             Decimal: lambda v: float(v),
-            date: lambda v: v.isoformat()
+            date: lambda v: v.isoformat() if v else None
         }
 
 
@@ -57,7 +57,7 @@ class ExpenseResponse(BaseModel):
     title: str
     description: str
     amount: Decimal
-    transaction_date: date
+    transaction_date: Optional[date] = None  # Made optional as column may not exist
     category: Optional[str] = None
     user_id: str
     created_at: datetime
@@ -70,8 +70,9 @@ class ExpenseResponse(BaseModel):
     
     @property
     def formatted_date(self) -> str:
-        """Format date for display"""
-        return self.transaction_date.strftime("%d %b %Y")
+        """Format date for display - use created_at if transaction_date not available"""
+        display_date = self.transaction_date or self.created_at.date()
+        return display_date.strftime("%d %b %Y")
     
     def to_telegram_message(self) -> str:
         """Convert to formatted Telegram message"""

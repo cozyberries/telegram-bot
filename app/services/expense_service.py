@@ -28,10 +28,10 @@ def get_expenses(
     
     total = count_response.count or 0
     
-    # Get expenses
+    # Get expenses - order by created_at instead of transaction_date
     response = supabase.table("expenses")\
         .select("*")\
-        .order("transaction_date", desc=True)\
+        .order("created_at", desc=True)\
         .range(offset, offset + limit - 1)\
         .execute()
     
@@ -65,7 +65,6 @@ def create_expense(expense_input: ExpenseInput) -> ExpenseResponse:
         "title": expense_input.title,
         "description": expense_input.description,
         "amount": float(expense_input.amount),
-        "transaction_date": expense_input.transaction_date.isoformat(),
         "category": expense_input.category,
         "user_id": expense_input.user_id
     }

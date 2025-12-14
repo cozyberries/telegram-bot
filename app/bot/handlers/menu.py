@@ -6,57 +6,10 @@ from app.bot.middleware.auth import admin_required
 
 
 def get_main_menu_keyboard() -> InlineKeyboardMarkup:
-    """Generate main menu keyboard"""
+    """Generate main menu keyboard - Expenses only"""
     keyboard = [
-        [
-            InlineKeyboardButton("📦 Orders", callback_data="menu_orders"),
-            InlineKeyboardButton("🛍️ Products", callback_data="menu_products"),
-        ],
-        [
-            InlineKeyboardButton("💰 Expenses", callback_data="menu_expenses"),
-            InlineKeyboardButton("📊 Stock", callback_data="menu_stock"),
-        ],
-        [
-            InlineKeyboardButton("📈 Analytics", callback_data="menu_analytics"),
-            InlineKeyboardButton("⚙️ Settings", callback_data="menu_settings"),
-        ],
+        [InlineKeyboardButton("💰 Expense Management", callback_data="menu_expenses")],
         [InlineKeyboardButton("❓ Help", callback_data="menu_help")]
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
-
-def get_orders_menu_keyboard() -> InlineKeyboardMarkup:
-    """Generate orders submenu keyboard"""
-    keyboard = [
-        [InlineKeyboardButton("📋 View All Orders", callback_data="orders_list_all")],
-        [
-            InlineKeyboardButton("⏳ Pending", callback_data="orders_filter_pending"),
-            InlineKeyboardButton("✅ Confirmed", callback_data="orders_filter_confirmed"),
-        ],
-        [
-            InlineKeyboardButton("📦 Shipped", callback_data="orders_filter_shipped"),
-            InlineKeyboardButton("✅ Delivered", callback_data="orders_filter_delivered"),
-        ],
-        [InlineKeyboardButton("➕ Create New Order", callback_data="orders_create")],
-        [InlineKeyboardButton("« Back to Main Menu", callback_data="menu_main")]
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
-
-def get_products_menu_keyboard() -> InlineKeyboardMarkup:
-    """Generate products submenu keyboard"""
-    keyboard = [
-        [InlineKeyboardButton("📋 View All Products", callback_data="products_list_all")],
-        [
-            InlineKeyboardButton("🔍 Search", callback_data="products_search"),
-            InlineKeyboardButton("📊 By Category", callback_data="products_by_category"),
-        ],
-        [InlineKeyboardButton("➕ Add New Product", callback_data="products_create")],
-        [
-            InlineKeyboardButton("✏️ Update Product", callback_data="products_update"),
-            InlineKeyboardButton("🗑️ Delete Product", callback_data="products_delete"),
-        ],
-        [InlineKeyboardButton("« Back to Main Menu", callback_data="menu_main")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -66,47 +19,9 @@ def get_expenses_menu_keyboard() -> InlineKeyboardMarkup:
     keyboard = [
         [InlineKeyboardButton("📋 View All Expenses", callback_data="expenses_list_all")],
         [
-            InlineKeyboardButton("⏳ Pending", callback_data="expenses_filter_pending"),
-            InlineKeyboardButton("✅ Approved", callback_data="expenses_filter_approved"),
+            InlineKeyboardButton("➕ Add Expense", callback_data="expenses_create"),
+            InlineKeyboardButton("📊 Statistics", callback_data="expenses_stats"),
         ],
-        [InlineKeyboardButton("➕ Add New Expense", callback_data="expenses_create")],
-        [
-            InlineKeyboardButton("✅ Approve", callback_data="expenses_approve"),
-            InlineKeyboardButton("❌ Reject", callback_data="expenses_reject"),
-        ],
-        [InlineKeyboardButton("« Back to Main Menu", callback_data="menu_main")]
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
-
-def get_stock_menu_keyboard() -> InlineKeyboardMarkup:
-    """Generate stock submenu keyboard"""
-    keyboard = [
-        [InlineKeyboardButton("📊 View All Stock", callback_data="stock_list_all")],
-        [
-            InlineKeyboardButton("⚠️ Low Stock", callback_data="stock_low"),
-            InlineKeyboardButton("❌ Out of Stock", callback_data="stock_out"),
-        ],
-        [InlineKeyboardButton("📝 Update Stock", callback_data="stock_update")],
-        [InlineKeyboardButton("📈 Stock Report", callback_data="stock_report")],
-        [InlineKeyboardButton("« Back to Main Menu", callback_data="menu_main")]
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
-
-def get_analytics_menu_keyboard() -> InlineKeyboardMarkup:
-    """Generate analytics submenu keyboard"""
-    keyboard = [
-        [InlineKeyboardButton("📊 Overall Stats", callback_data="analytics_overall")],
-        [
-            InlineKeyboardButton("📦 Order Stats", callback_data="analytics_orders"),
-            InlineKeyboardButton("💰 Expense Stats", callback_data="analytics_expenses"),
-        ],
-        [
-            InlineKeyboardButton("🛍️ Product Stats", callback_data="analytics_products"),
-            InlineKeyboardButton("📈 Revenue Stats", callback_data="analytics_revenue"),
-        ],
-        [InlineKeyboardButton("📅 Date Range Report", callback_data="analytics_date_range")],
         [InlineKeyboardButton("« Back to Main Menu", callback_data="menu_main")]
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -200,8 +115,9 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     text = (
         f"👋 Welcome *{user.first_name}*!\n\n"
-        "🏪 *CozyBerries Admin Panel*\n\n"
-        "Choose a category to manage:"
+        "💰 *CozyBerries Expense Manager*\n\n"
+        "Manage all your business expenses with ease.\n"
+        "Track spending, categorize expenses, and get insights."
     )
     
     keyboard = get_main_menu_keyboard()
@@ -233,44 +149,12 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     if data == "menu_main":
         await show_main_menu(update, context)
     
-    elif data == "menu_orders":
-        text = "📦 *Orders Management*\n\nSelect an action:"
-        await query.edit_message_text(
-            text,
-            parse_mode="Markdown",
-            reply_markup=get_orders_menu_keyboard()
-        )
-    
-    elif data == "menu_products":
-        text = "🛍️ *Products Management*\n\nSelect an action:"
-        await query.edit_message_text(
-            text,
-            parse_mode="Markdown",
-            reply_markup=get_products_menu_keyboard()
-        )
-    
     elif data == "menu_expenses":
-        text = "💰 *Expenses Management*\n\nSelect an action:"
+        text = "💰 *Expense Management*\n\nSelect an action:"
         await query.edit_message_text(
             text,
             parse_mode="Markdown",
             reply_markup=get_expenses_menu_keyboard()
-        )
-    
-    elif data == "menu_stock":
-        text = "📊 *Stock Management*\n\nSelect an action:"
-        await query.edit_message_text(
-            text,
-            parse_mode="Markdown",
-            reply_markup=get_stock_menu_keyboard()
-        )
-    
-    elif data == "menu_analytics":
-        text = "📈 *Analytics Dashboard*\n\nSelect a report:"
-        await query.edit_message_text(
-            text,
-            parse_mode="Markdown",
-            reply_markup=get_analytics_menu_keyboard()
         )
     
     elif data == "menu_help":
@@ -278,37 +162,25 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             "❓ *Help & Commands*\n\n"
             "*How to use this bot:*\n"
             "1. Use the menu buttons to navigate\n"
-            "2. Select actions from submenus\n"
+            "2. Select actions from expense menu\n"
             "3. Follow prompts for data entry\n\n"
+            "*Available Features:*\n"
+            "• View all expenses\n"
+            "• Add new expenses\n"
+            "• Browse expenses with pagination\n"
+            "• View expense details\n"
+            "• Delete expenses\n"
+            "• View expense statistics\n\n"
             "*Quick Commands:*\n"
             "/menu - Show main menu\n"
-            "/orders - Orders management\n"
-            "/products - Products management\n"
-            "/expenses - Expenses management\n"
-            "/stock - Stock management\n"
-            "/stats - View analytics\n\n"
-            "💡 *Tip:* All operations are now accessible through interactive menus!"
+            "/expenses - List expenses\n"
+            "/add_expense - Add new expense\n"
+            "/stats - View expense statistics\n\n"
+            "💡 *Tip:* All operations are accessible through interactive menus!"
         )
         keyboard = [[InlineKeyboardButton("« Back to Main Menu", callback_data="menu_main")]]
         await query.edit_message_text(
             help_text,
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-    
-    elif data == "menu_settings":
-        text = (
-            "⚙️ *Settings*\n\n"
-            "_Settings panel coming soon..._\n\n"
-            "Configure:\n"
-            "• Notification preferences\n"
-            "• Low stock thresholds\n"
-            "• Currency settings\n"
-            "• Export options"
-        )
-        keyboard = [[InlineKeyboardButton("« Back to Main Menu", callback_data="menu_main")]]
-        await query.edit_message_text(
-            text,
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
