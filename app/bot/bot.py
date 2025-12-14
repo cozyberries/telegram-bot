@@ -1,7 +1,7 @@
 """Telegram bot initialization and setup"""
 
 import logging
-from telegram import Update, BotCommand
+from telegram import Update, BotCommand, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -148,7 +148,7 @@ class TelegramBot:
             
             elif data.startswith("expenses_"):
                 # Handle expenses interactive menu
-                from app.bot.handlers import expenses
+                from app.bot.handlers.expenses_menu import handle_expenses_menu
                 await handle_expenses_menu(update, context)
             
             # No-op (for pagination indicators)
@@ -163,57 +163,6 @@ class TelegramBot:
         except Exception as e:
             logger.error(f"Error handling callback query: {e}", exc_info=True)
             await query.answer(f"Error: {str(e)}", show_alert=True)
-
-
-async def handle_expenses_menu(update: Update, context):
-    """Handle expenses menu callbacks"""
-    query = update.callback_query
-    data = query.data
-    
-    if data == "expenses_list_all":
-        from app.bot.handlers import expenses
-        # Redirect to list expenses
-        await expenses.list_expenses_command(update, context)
-    
-    elif data == "expenses_create":
-        from app.bot.handlers import expenses
-        # Start the add expense conversation
-        text = (
-            "➕ *Add New Expense*\n\n"
-            "Please use the /add_expense command to start adding a new expense.\n\n"
-            "Or tap the button below:"
-        )
-        keyboard = [
-            [InlineKeyboardButton("Start Adding Expense", callback_data="start_add_expense")],
-            [InlineKeyboardButton("« Back", callback_data="menu_expenses")]
-        ]
-        await query.edit_message_text(
-            text,
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-    
-    elif data == "start_add_expense":
-        from app.bot.handlers import expenses
-        # Trigger add_expense_start
-        await expenses.add_expense_start(update, context)
-    
-    elif data == "expenses_stats":
-        from app.services import expense_service
-        try:
-            stats = expense_service.get_expense_stats()
-            message = "📊 *Expense Statistics*\n\n" + stats.to_telegram_message()
-            
-            keyboard = [[InlineKeyboardButton("« Back to Expenses", callback_data="menu_expenses")]]
-            await query.edit_message_text(
-                message,
-                parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-        except Exception as e:
-            await query.answer(f"Error: {str(e)}", show_alert=True)
-    
-    await query.answer()
     
     async def _error_handler(self, update: Update, context):
         """Handle errors"""
